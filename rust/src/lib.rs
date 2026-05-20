@@ -107,7 +107,7 @@ pub fn verify_pq(public_key: &[u8], timestamp: &str, raw_body: &[u8], sig_header
         Err(_) => return false,
     };
     let env = envelope(timestamp, raw_body);
-    pk.try_verify(&env, &sig_arr, &[]).unwrap_or(false)
+    pk.verify(&env, &sig_arr, &[])
 }
 
 /// 16-hex kid fingerprint: first 8 bytes of SHA-256 of the public key.
