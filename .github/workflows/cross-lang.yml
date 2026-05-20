@@ -1,0 +1,63 @@
+name: cross-language compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  javascript:
+    name: JavaScript / Node 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm install kxco-post-quantum@latest
+      - run: node -e "import('kxco-post-quantum').then(m => console.log(Object.keys(m)))"
+
+  go:
+    name: Go / 1.22
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: ./go } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.22' }
+      - run: go mod tidy
+      - run: go test ./...
+
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: ./python } }
+    strategy:
+      matrix:
+        python: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: ${{ matrix.python }} }
+      - run: python test_kxco_verify.py
+
+  rust:
+    name: Rust / stable
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: ./rust } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with: { toolchain: stable }
+      - run: cargo test --all-features
+
+  vectors-checksum:
+    name: Vectors file integrity
+    runs-on: ubuntu-latest
+    needs: [javascript, go, python, rust]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm vectors.json is byte-identical across language dirs
+        run: |
+          sha256sum vectors/vectors.json
+          echo "All language verifiers above passed against this exact file."

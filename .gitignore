@@ -1,0 +1,17 @@
+node_modules/
+.npmrc
+*.log
+.DS_Store
+
+# Go
+go/vendor/
+
+# Python
+python/__pycache__/
+python/*.egg-info/
+python/build/
+python/dist/
+
+# Rust
+rust/target/
+rust/Cargo.lock

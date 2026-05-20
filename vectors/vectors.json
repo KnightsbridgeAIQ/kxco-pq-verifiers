@@ -1,0 +1,137 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-20T18:58:39.432Z",
+  "description": "Deterministic test vectors for kxco-post-quantum. Run test/run-vectors.js to verify these match the library output bit-for-bit.",
+  "library": "kxco-post-quantum",
+  "underlying_primitive": "@noble/post-quantum",
+  "notes": [
+    "ML-DSA-65 signatures are randomized — we cannot pin signature bytes. We pin keypair hashes and verify round-trip.",
+    "ML-KEM encapsulation is randomized — we pin keypair hashes and verify decapsulate round-trip in the runner.",
+    "All hex is lowercase. All UTF-8 strings are explicit."
+  ],
+  "deriveSeed": [
+    {
+      "name": "zero master, info=role-a, length=32",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "role-a",
+      "length": 32,
+      "expect_hex": "873c6de3e076daede530be45f1f7953a29fec20648557429d2607e08c3ad8d7c"
+    },
+    {
+      "name": "zero master, info=role-b, length=32 (different info → different seed)",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "role-b",
+      "length": 32,
+      "expect_hex": "80f852c16846b2a44c64c7742cd8df83f9b1a98f969dd0496904c3bdd08cd8cc"
+    },
+    {
+      "name": "0x11 master, info=platform-v1, length=64",
+      "master_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "info": "platform-v1",
+      "length": 64,
+      "expect_hex": "a9df8abe6efa342d56b911f8eeea67bb553d675e4411ea046b9aca2fa409fcc2b92166b6117606627faed0a66f890403ad2fa6d9d3dadc69bd5559f3da92eec3"
+    }
+  ],
+  "mlDsa_keypairFromMaster": [
+    {
+      "name": "zero master, info=platform-v1",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "platform-v1",
+      "publicKey_sha256": "dc29825b2f9cc9f1671ca499c27d013c2b4ac86e1c6ce365f40556ec82916e57",
+      "publicKey_bytes": 1952,
+      "secretKey_sha256": "fad19856458d742f62d79dbd772cfaea7ad2e432111a9663d159b079d15f51eb",
+      "secretKey_bytes": 4032
+    },
+    {
+      "name": "0xff master, info=test",
+      "master_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "info": "test",
+      "publicKey_sha256": "b5efe3602d7d87e29ce642ff44a682ded5408e43b965b2a22e5aedec0d8ab9aa",
+      "publicKey_bytes": 1952,
+      "secretKey_sha256": "abd46a2431e7e82249e798e7ca634785ba1f43e052e4649a4e0e02536db47770",
+      "secretKey_bytes": 4032
+    }
+  ],
+  "mlDsa_sign_roundtrip": [
+    {
+      "name": "sign known message with keypair from zero master; verify true",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "platform-v1",
+      "message_utf8": "hello kxco",
+      "expect_verify": true,
+      "expect_sig_hex_length": 6618
+    }
+  ],
+  "mlKem_keypairFromMaster": [
+    {
+      "name": "zero master, info=platform-v1",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "platform-v1",
+      "publicKey_sha256": "8393aadd8e9070c8b43b65a1e05eb43f9c9e7e32ba7880261a2cbcabda58c188",
+      "publicKey_bytes": 1184,
+      "secretKey_sha256": "8d21f316efc198ba3cab8e7c9270f57efe351bed4d0f66c66f6d454d4282423e",
+      "secretKey_bytes": 2400
+    }
+  ],
+  "mlKem_encapsulate_roundtrip": [
+    {
+      "name": "encapsulate to keypair from zero master; decapsulate recovers same secret",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "platform-v1",
+      "expect_sharedSecret_bytes": 32,
+      "expect_ciphertext_bytes": 1088
+    }
+  ],
+  "fingerprint": [
+    {
+      "name": "fingerprint of 32 zero bytes",
+      "input_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expect_kid": "66687aadf862bd77"
+    },
+    {
+      "name": "fingerprint of 32 0xff bytes",
+      "input_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect_kid": "af9613760f72635f"
+    },
+    {
+      "name": "fingerprint of UTF-8 string 'kxco'",
+      "input_utf8": "kxco",
+      "expect_kid": "00932b8f81e33fa2"
+    },
+    {
+      "name": "fingerprint of ML-DSA-65 platform pubkey from zero master",
+      "input_source": "mlDsa.keypairFromMaster(0x00*32, \"platform-v1\").publicKey",
+      "expect_kid": "dc29825b2f9cc9f1"
+    }
+  ],
+  "webhook_envelope": [
+    {
+      "name": "envelope concatenation",
+      "timestamp": "1748000000",
+      "body_utf8": "{\"event\":\"payment.settled\",\"amount\":1000}",
+      "expect_envelope_hex": "313734383030303030302e7b226576656e74223a227061796d656e742e736574746c6564222c22616d6f756e74223a313030307d"
+    }
+  ],
+  "webhook_hmac": [
+    {
+      "name": "HMAC-SHA-256 over envelope",
+      "secret_utf8": "shared-secret-bytes",
+      "timestamp": "1748000000",
+      "body_utf8": "{\"event\":\"payment.settled\",\"amount\":1000}",
+      "expect_hmac_hex": "63ed31450be6c8771c2eb9a92888aecd814431360ac06aaac95faa94cf5bd665"
+    }
+  ],
+  "webhook_hybrid_roundtrip": [
+    {
+      "name": "sign + verify with platform keypair from zero master",
+      "master_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "info": "platform-v1",
+      "timestamp": "1748000000",
+      "body_utf8": "{\"event\":\"payment.settled\",\"amount\":1000}",
+      "hmac_secret_utf8": "shared-secret-bytes",
+      "expect_hmac_ok": true,
+      "expect_pq_ok": true,
+      "expect_timestamp_ok_when_fresh": true
+    }
+  ]
+}

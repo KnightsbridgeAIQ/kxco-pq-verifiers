@@ -1,0 +1,28 @@
+[project]
+name = "kxco-verify"
+version = "1.0.0"
+description = "Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme"
+authors = [{ name = "KXCO by Knightsbridge", email = "hello@kxco.ai" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["post-quantum", "ml-dsa", "dilithium", "webhook", "fips-204", "kxco"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security :: Cryptography",
+]
+
+[project.optional-dependencies]
+oqs = ["liboqs-python>=0.10"]
+pqcrypto = ["pqcrypto>=0.3"]
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://kxco.ai"
+Documentation = "https://chain.kxco.ai/wallet/dev-docs"
+Repository = "https://github.com/JackKXCO/kxco-post-quantum-verifiers"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
