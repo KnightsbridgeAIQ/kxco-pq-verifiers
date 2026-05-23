@@ -1,6 +1,6 @@
 [project]
 name = "kxco-verify"
-version = "1.0.0"
+version = "1.1.0"
 description = "Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme"
 authors = [{ name = "KXCO by Knightsbridge", email = "hello@kxco.ai" }]
 license = { text = "MIT" }

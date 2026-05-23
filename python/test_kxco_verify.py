@@ -83,6 +83,61 @@ def test_verify_hmac_accepts_prefixed_and_bare():
     assert not kx.verify_hmac(secret, vec["timestamp"], body, tampered)
 
 
+def test_verify_delivery_pinned_kids_rejects_mixed_with_singular():
+    """v1.1.0 — pinned_kids is mutually exclusive with pinned_kid/pq_public_key."""
+    raised = False
+    try:
+        kx.verify_delivery(
+            headers={}, raw_body=b"",
+            pq_public_key=b"\x00" * 1952, pinned_kid="abcdef0123456789",
+            pinned_kids={"abcdef0123456789": b"\x00" * 1952},
+        )
+    except ValueError as e:
+        raised = "mutually exclusive" in str(e)
+    assert raised
+
+
+def test_verify_delivery_pinned_kids_kid_mismatch_sets_kid_not_ok():
+    """v1.1.0 — incoming kid absent from pinned_kids set => kid_ok=False, resolved_kid=None."""
+    kids = {
+        "aaaaaaaaaaaaaaaa": b"\x00" * 1952,
+        "bbbbbbbbbbbbbbbb": b"\x00" * 1952,
+    }
+    now = 1_000_000_000
+    headers = {
+        "x-kxco-timestamp": str(now),
+        "x-kxco-pq-kid": "cccccccccccccccc",
+        "x-kxco-pq-signature": "ml-dsa-65=" + "00" * 3309,
+    }
+    r = kx.verify_delivery(headers=headers, raw_body=b"{}", pinned_kids=kids, now_unix=now)
+    assert r.kid_ok is False
+    assert r.resolved_kid is None
+    assert r.pq_ok is False
+    assert r.ok is False
+
+
+def test_verify_delivery_pinned_kids_kid_match_resolves_kid():
+    """v1.1.0 — incoming kid in pinned_kids set => resolved_kid populated, kid_ok=True.
+
+    No pq-signature header is sent — we're testing kid RESOLUTION, not the
+    PQ math itself. (PQ math is exercised by the existing oqs/pqcrypto-backed
+    integration tests in CI.)
+    """
+    pubkey = b"\x00" * 1952
+    kids = {"aaaaaaaaaaaaaaaa": pubkey, "bbbbbbbbbbbbbbbb": pubkey}
+    now = 1_000_000_000
+    headers = {
+        "x-kxco-timestamp": str(now),
+        "x-kxco-pq-kid":    "aaaaaaaaaaaaaaaa",
+        # deliberately no x-kxco-pq-signature: pq_ok stays False, kid resolution still works
+    }
+    r = kx.verify_delivery(headers=headers, raw_body=b"{}", pinned_kids=kids, now_unix=now)
+    assert r.kid_ok is True, f"expected kid_ok=True, got {r.kid_ok}"
+    assert r.resolved_kid == "aaaaaaaaaaaaaaaa", f"expected resolved_kid='aaa…', got {r.resolved_kid!r}"
+    assert r.pq_ok is False  # no sig sent => no pq verify
+    assert r.timestamp_ok is True
+
+
 if __name__ == "__main__":
     # Plain runner — no pytest required
     tests = [
@@ -92,6 +147,9 @@ if __name__ == "__main__":
         ("fingerprint_utf8_input", test_fingerprint_utf8_input),
         ("kid_equals", test_kid_equals),
         ("verify_hmac_prefixes", test_verify_hmac_accepts_prefixed_and_bare),
+        ("pinned_kids_mutual_exclusion",   test_verify_delivery_pinned_kids_rejects_mixed_with_singular),
+        ("pinned_kids_kid_mismatch",       test_verify_delivery_pinned_kids_kid_mismatch_sets_kid_not_ok),
+        ("pinned_kids_kid_match_resolves", test_verify_delivery_pinned_kids_kid_match_resolves_kid),
     ]
     failed = 0
     for name, fn in tests:

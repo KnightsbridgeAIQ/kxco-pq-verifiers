@@ -6,6 +6,18 @@ each language uses its own SemVer line.
 
 ## [Unreleased]
 
+## [Python 1.1.0] — 2026-05-23
+
+### Added
+- **`verify_delivery(..., pinned_kids=...)`** — accept a `Mapping[str, bytes]` of `{kid: pubkey}` instead of a single `pinned_kid` + `pq_public_key`. The verifier looks up the matching pubkey by the incoming `X-KXCO-PQ-Kid` header. Closes Python's gap behind the Phase 5 `pinnedKids[]` spec extension in `kxco-post-quantum-webhook` ≥ 0.3.0.
+- **`VerifyResult.resolved_kid`** — populated with the matched kid string when `pinned_kids` is used and matched; `None` for single-kid mode. Useful for logging / metrics during rotation.
+- Mutual-exclusion check: passing both `pinned_kids` and `pinned_kid`/`pq_public_key` raises `ValueError`.
+- Tests: 3 new cases covering mutex enforcement, kid-mismatch handling, kid-match resolution.
+
+### Compatibility
+- Singular `pinned_kid` + `pq_public_key` form continues to work unchanged. Zero behaviour change for 1.0.0 callers.
+- Wire format is identical to `kxco-post-quantum-webhook` ≥ 0.3.0 and to the spec in [`docs/webhook-contract.md`](https://github.com/JackKXCO/kxco-post-quantum-webhook/blob/main/docs/webhook-contract.md#key-rotation-and-history).
+
 ### Added
 - `SECURITY.md` — scope, threat model, disclosure window
 - `.github/dependabot.yml` — weekly Mon 06:00 UTC for gomod, pip, cargo, github-actions

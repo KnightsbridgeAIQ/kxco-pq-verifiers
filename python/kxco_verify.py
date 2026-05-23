@@ -147,6 +147,9 @@ class VerifyResult:
     pq_ok: bool
     timestamp_ok: bool
     kid_ok: bool
+    # Populated when `pinned_kids` is used and the incoming kid matched one
+    # of the pinned entries. None when single-kid mode is used.
+    resolved_kid: Optional[str] = None
 
     @property
     def ok(self) -> bool:
@@ -160,6 +163,7 @@ def verify_delivery(
     hmac_secret: Optional[bytes] = None,
     pq_public_key: Optional[bytes] = None,
     pinned_kid: Optional[str] = None,
+    pinned_kids: Optional[Mapping[str, bytes]] = None,
     window_seconds: int = DEFAULT_REPLAY_WINDOW,
     now_unix: Optional[int] = None,
 ) -> VerifyResult:
@@ -169,7 +173,17 @@ def verify_delivery(
     received over the wire (do not re-stringify a parsed JSON object).
 
     Either signature alone is sufficient; verifying both is defence-in-depth.
+
+    Multi-kid rotation (v1.1.0): pass `pinned_kids` as ``{kid_hex: pubkey_bytes}``
+    to accept any kid in the set. Mutually exclusive with ``pinned_kid`` +
+    ``pq_public_key``. See the rotation playbook at
+    https://github.com/JackKXCO/kxco-post-quantum-webhook/blob/main/docs/key-rotation-playbook.md
     """
+    if pinned_kids is not None and (pinned_kid is not None or pq_public_key is not None):
+        raise ValueError(
+            "verify_delivery: pinned_kids is mutually exclusive with pinned_kid/pq_public_key — pick one shape"
+        )
+
     timestamp = headers.get("x-kxco-timestamp", "")
     sig_hmac = headers.get("x-kxco-signature", "")
     sig_pq = headers.get("x-kxco-pq-signature", "")
@@ -182,17 +196,41 @@ def verify_delivery(
 
     now = now_unix if now_unix is not None else int(time.time())
     timestamp_ok = abs(now - ts) <= window_seconds
-    kid_ok = (pinned_kid is None) or kid_equals(kid, pinned_kid)
+
+    # Resolve which pubkey (if any) to verify against this delivery.
+    effective_pubkey: Optional[bytes] = pq_public_key
+    effective_pinned_kid: Optional[str] = pinned_kid
+    resolved_kid: Optional[str] = None
+
+    if pinned_kids is not None:
+        # Multi-kid mode — look up the pubkey by the header's kid.
+        match = pinned_kids.get(kid)
+        if match is not None:
+            effective_pubkey = match
+            effective_pinned_kid = kid  # by definition matches
+            resolved_kid = kid
+        else:
+            # No match — kid_ok will be False; pq won't be attempted.
+            effective_pubkey = None
+            effective_pinned_kid = None
+
+    if pinned_kids is not None:
+        kid_ok = resolved_kid is not None
+    else:
+        kid_ok = (effective_pinned_kid is None) or kid_equals(kid, effective_pinned_kid)
 
     hmac_ok = False
     if hmac_secret is not None and sig_hmac and timestamp_ok:
         hmac_ok = verify_hmac(hmac_secret, timestamp, raw_body, sig_hmac)
 
     pq_ok = False
-    if pq_public_key is not None and sig_pq and timestamp_ok and kid_ok:
-        pq_ok = verify_pq(pq_public_key, timestamp, raw_body, sig_pq)
+    if effective_pubkey is not None and sig_pq and timestamp_ok and kid_ok:
+        pq_ok = verify_pq(effective_pubkey, timestamp, raw_body, sig_pq)
 
-    return VerifyResult(hmac_ok=hmac_ok, pq_ok=pq_ok, timestamp_ok=timestamp_ok, kid_ok=kid_ok)
+    return VerifyResult(
+        hmac_ok=hmac_ok, pq_ok=pq_ok, timestamp_ok=timestamp_ok,
+        kid_ok=kid_ok, resolved_kid=resolved_kid,
+    )
 
 
 __all__ = [
