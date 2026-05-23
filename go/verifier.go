@@ -31,6 +31,10 @@ type Result struct {
 	PqOk        bool
 	TimestampOk bool
 	KidOk       bool
+	// ResolvedKid is populated when PinnedKids is used and the incoming
+	// X-KXCO-PQ-Kid header matched one of the pinned entries. Empty for
+	// single-kid mode.
+	ResolvedKid string
 }
 
 // Ok reports whether the delivery should be accepted.
@@ -111,12 +115,24 @@ type VerifyDeliveryArgs struct {
 	HMACSecret    []byte // optional: omit to skip HMAC check
 	PQPublicKey   []byte // optional: omit to skip PQ check
 	PinnedKid     string // required when PQPublicKey is set
-	WindowSeconds int64  // default DefaultReplayWindow
+	// PinnedKids is a map of kid hex → raw 1952-byte ML-DSA-65 pubkey.
+	// When set, the verifier looks up the incoming X-KXCO-PQ-Kid header
+	// against the map and uses the matched pubkey. Mutually exclusive
+	// with PQPublicKey / PinnedKid (combining them returns an error).
+	//
+	// Added in v1.1.0 for Phase 5 multi-kid rotation support — see the
+	// rotation playbook in kxco-post-quantum-webhook.
+	PinnedKids    map[string][]byte
+	WindowSeconds int64 // default DefaultReplayWindow
 }
 
 // VerifyDelivery checks every available signature and the timestamp window.
 // Either signature alone is sufficient; verifying both is defence-in-depth.
 func VerifyDelivery(args VerifyDeliveryArgs) (Result, error) {
+	if args.PinnedKids != nil && (args.PinnedKid != "" || args.PQPublicKey != nil) {
+		return Result{}, errors.New("VerifyDelivery: PinnedKids is mutually exclusive with PinnedKid/PQPublicKey — pick one shape")
+	}
+
 	if args.WindowSeconds == 0 {
 		args.WindowSeconds = DefaultReplayWindow
 	}
@@ -133,20 +149,45 @@ func VerifyDelivery(args VerifyDeliveryArgs) (Result, error) {
 	if delta < 0 {
 		delta = -delta
 	}
+
+	// Resolve which pubkey to verify against this delivery.
+	var (
+		effPubKey  = args.PQPublicKey
+		effPinned  = args.PinnedKid
+		resolved   string
+		kidOk      bool
+	)
+	if args.PinnedKids != nil {
+		if k, found := args.PinnedKids[kid]; found {
+			effPubKey = k
+			effPinned = kid
+			resolved = kid
+			kidOk = true
+		} else {
+			effPubKey = nil
+			effPinned = ""
+			kidOk = false // no match in the pin set
+		}
+	} else {
+		kidOk = args.PinnedKid == "" || KidEquals(kid, args.PinnedKid)
+	}
+
 	r := Result{
 		TimestampOk: delta <= args.WindowSeconds,
-		KidOk:       args.PinnedKid == "" || KidEquals(kid, args.PinnedKid),
+		KidOk:       kidOk,
+		ResolvedKid: resolved,
 	}
 
 	if args.HMACSecret != nil && sigHmac != "" && r.TimestampOk {
 		r.HmacOk = VerifyHMAC(args.HMACSecret, timestamp, args.RawBody, sigHmac)
 	}
-	if args.PQPublicKey != nil && sigPq != "" && r.TimestampOk && r.KidOk {
-		ok, err := VerifyPQ(args.PQPublicKey, timestamp, args.RawBody, sigPq)
+	if effPubKey != nil && sigPq != "" && r.TimestampOk && r.KidOk {
+		ok, err := VerifyPQ(effPubKey, timestamp, args.RawBody, sigPq)
 		if err != nil {
 			return r, err
 		}
 		r.PqOk = ok
 	}
+	_ = effPinned // currently unused but reserved for future log/metric annotation
 	return r, nil
 }

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type vectorFile struct {
@@ -132,5 +134,86 @@ func TestVerifyHMACAcceptsBareAndPrefixed(t *testing.T) {
 	tampered := strings.Replace(bare, bare[:1], "0", 1)
 	if VerifyHMAC([]byte(vec.SecretUtf8), vec.Timestamp, []byte(vec.BodyUtf8), tampered) {
 		t.Error("VerifyHMAC should reject tampered HMAC")
+	}
+}
+
+// ── v1.1.0 — PinnedKids multi-kid rotation tests ───────────────────────────
+
+func TestVerifyDeliveryPinnedKidsRejectsMixedWithSingular(t *testing.T) {
+	zeroPubKey := make([]byte, 1952)
+	_, err := VerifyDelivery(VerifyDeliveryArgs{
+		Headers:     map[string]string{},
+		RawBody:     []byte("{}"),
+		PQPublicKey: zeroPubKey,
+		PinnedKid:   "aaaaaaaaaaaaaaaa",
+		PinnedKids: map[string][]byte{
+			"aaaaaaaaaaaaaaaa": zeroPubKey,
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected mutually-exclusive error, got %v", err)
+	}
+}
+
+func TestVerifyDeliveryPinnedKidsKidMismatch(t *testing.T) {
+	zeroPubKey := make([]byte, 1952)
+	now := time.Now().Unix()
+	r, err := VerifyDelivery(VerifyDeliveryArgs{
+		Headers: map[string]string{
+			"x-kxco-timestamp":    strconv.FormatInt(now, 10),
+			"x-kxco-pq-kid":       "cccccccccccccccc",
+			"x-kxco-pq-signature": "ml-dsa-65=" + strings.Repeat("00", 3309),
+		},
+		RawBody: []byte("{}"),
+		PinnedKids: map[string][]byte{
+			"aaaaaaaaaaaaaaaa": zeroPubKey,
+			"bbbbbbbbbbbbbbbb": zeroPubKey,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.KidOk {
+		t.Error("expected KidOk=false for unmatched kid")
+	}
+	if r.ResolvedKid != "" {
+		t.Errorf("expected empty ResolvedKid, got %q", r.ResolvedKid)
+	}
+	if r.PqOk {
+		t.Error("expected PqOk=false when KidOk=false")
+	}
+	if r.Ok() {
+		t.Error("expected Ok=false for unmatched kid")
+	}
+}
+
+func TestVerifyDeliveryPinnedKidsKidMatchResolves(t *testing.T) {
+	zeroPubKey := make([]byte, 1952)
+	now := time.Now().Unix()
+	r, err := VerifyDelivery(VerifyDeliveryArgs{
+		Headers: map[string]string{
+			"x-kxco-timestamp": strconv.FormatInt(now, 10),
+			"x-kxco-pq-kid":    "aaaaaaaaaaaaaaaa",
+		},
+		RawBody: []byte("{}"),
+		PinnedKids: map[string][]byte{
+			"aaaaaaaaaaaaaaaa": zeroPubKey,
+			"bbbbbbbbbbbbbbbb": zeroPubKey,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !r.KidOk {
+		t.Error("expected KidOk=true for matched kid")
+	}
+	if r.ResolvedKid != "aaaaaaaaaaaaaaaa" {
+		t.Errorf("expected ResolvedKid='aaaa…', got %q", r.ResolvedKid)
+	}
+	if r.PqOk {
+		t.Error("expected PqOk=false (no signature provided)")
+	}
+	if !r.TimestampOk {
+		t.Error("expected TimestampOk=true for fresh timestamp")
 	}
 }

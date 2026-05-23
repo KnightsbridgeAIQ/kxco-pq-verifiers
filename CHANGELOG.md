@@ -6,6 +6,19 @@ each language uses its own SemVer line.
 
 ## [Unreleased]
 
+## [Go 1.1.0] — 2026-05-23
+
+### Added
+- **`VerifyDeliveryArgs.PinnedKids map[string][]byte`** — accept a map of `{kid_hex: pubkey_bytes}` instead of a single `PinnedKid` + `PQPublicKey`. The verifier looks up the matching pubkey by the incoming `X-KXCO-PQ-Kid` header. Closes Go's gap behind the Phase 5 `pinnedKids[]` spec extension in `kxco-post-quantum-webhook` ≥ 0.3.0.
+- **`Result.ResolvedKid`** — populated with the matched kid string when `PinnedKids` is used and matched; empty for single-kid mode.
+- Mutual-exclusion check: passing both `PinnedKids` and `PinnedKid`/`PQPublicKey` returns an error.
+- Tests: 3 new cases covering mutex enforcement, kid-mismatch handling, kid-match resolution.
+
+### Compatibility
+- Singular `PinnedKid` + `PQPublicKey` form continues to work unchanged. Zero behaviour change for v1.0.0 callers.
+- Wire format identical to `kxco-post-quantum-webhook` ≥ 0.3.0 and to the spec in [`docs/webhook-contract.md`](https://github.com/JackKXCO/kxco-post-quantum-webhook/blob/main/docs/webhook-contract.md#key-rotation-and-history).
+- Install: `go get github.com/JackKXCO/kxco-post-quantum-verifiers/go@v1.1.0`
+
 ## [Python 1.1.0] — 2026-05-23
 
 ### Added
