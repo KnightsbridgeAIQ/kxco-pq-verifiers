@@ -4,11 +4,11 @@
 
 Receiver-side verifier implementations of the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme. Every implementation verifies the same `vectors/vectors.json` against the same envelope format. Banks live in Go and Java. Fintech ops live in Python. Systems integrators live in Rust. A JavaScript-only verifier locks out the institutional buyer. This repo closes that gap.
 
-[![cross-language CI](https://github.com/JackKXCO/kxco-post-quantum-verifiers/actions/workflows/cross-lang.yml/badge.svg)](https://github.com/JackKXCO/kxco-post-quantum-verifiers/actions/workflows/cross-lang.yml)
+[![cross-language CI](https://github.com/KnightsbridgeAIQ/kxco-post-quantum-verifiers/actions/workflows/cross-lang.yml/badge.svg)](https://github.com/KnightsbridgeAIQ/kxco-post-quantum-verifiers/actions/workflows/cross-lang.yml)
 [![npm](https://img.shields.io/npm/v/kxco-post-quantum?label=npm)](https://www.npmjs.com/package/kxco-post-quantum)
 [![PyPI](https://img.shields.io/pypi/v/kxco-verify?label=pypi)](https://pypi.org/project/kxco-verify/)
 [![crates.io](https://img.shields.io/crates/v/kxco-verify?label=crates.io)](https://crates.io/crates/kxco-verify)
-[![Go module](https://img.shields.io/badge/go.mod-v1.0.0-007d9c?logo=go)](https://pkg.go.dev/github.com/JackKXCO/kxco-post-quantum-verifiers/go)
+[![Go module](https://img.shields.io/badge/go.mod-v1.0.0-007d9c?logo=go)](https://pkg.go.dev/go.kxco.ai/verifiers)
 [![live](https://img.shields.io/website?url=https%3A%2F%2Fchain.kxco.ai%2Fwallet%2Fverify&up_message=live&up_color=brightgreen&down_message=down&down_color=red&label=production)](https://chain.kxco.ai/wallet/verify)
 
 ## Install in your language
@@ -24,7 +24,7 @@ pip install kxco-verify
 cargo add kxco-verify
 
 # Go
-go get github.com/JackKXCO/kxco-post-quantum-verifiers/go@latest
+go get go.kxco.ai/verifiers@latest
 ```
 
 ## Verify a real KXCO production webhook
@@ -91,7 +91,7 @@ if !result.ok() {
 ### Go
 
 ```go
-import kxcoverify "github.com/JackKXCO/kxco-post-quantum-verifiers/go"
+import kxcoverify "go.kxco.ai/verifiers"
 
 var PinnedKid = "aa29f37ab7f4b2cf"
 
