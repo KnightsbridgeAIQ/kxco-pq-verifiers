@@ -1,4 +1,4 @@
-module github.com/JackKXCO/kxco-post-quantum-verifiers/go
+module go.kxco.ai/verifiers
 
 go 1.22
 
