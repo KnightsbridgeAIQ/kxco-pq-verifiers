@@ -5,7 +5,7 @@ Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature sc
 ## Install
 
 ```bash
-go get github.com/JackKXCO/kxco-post-quantum-verifiers/go
+go get go.kxco.ai/verifiers
 ```
 
 ## Quick start
@@ -16,7 +16,7 @@ import (
     "net/http"
     "io"
 
-    kxcoverify "github.com/JackKXCO/kxco-post-quantum-verifiers/go"
+    kxcoverify "go.kxco.ai/verifiers"
 )
 
 // Pin these from /.well-known/kxco-pq-pubkey on first integration
