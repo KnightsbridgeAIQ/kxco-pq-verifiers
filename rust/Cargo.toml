@@ -13,7 +13,7 @@ readme      = "README.md"
 [dependencies]
 hex          = "0.4"
 hmac         = "0.12"
-sha2         = "0.10"
+sha2         = "0.11"
 subtle       = "2.5"
 # ML-DSA-65 verification backend — pure-Rust FIPS 204 implementation
 fips204      = "0.4"
