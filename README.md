@@ -1,10 +1,10 @@
-# kxco-post-quantum-verifiers
+# kxco-pq-verifiers
 
 **Four languages. One wire format. Signatures interchange.**
 
 Receiver-side verifier implementations of the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme. Every implementation verifies the same `vectors/vectors.json` against the same envelope format. Banks live in Go and Java. Fintech ops live in Python. Systems integrators live in Rust. A JavaScript-only verifier locks out the institutional buyer. This repo closes that gap.
 
-[![cross-language CI](https://github.com/KnightsbridgeAIQ/kxco-post-quantum-verifiers/actions/workflows/cross-lang.yml/badge.svg)](https://github.com/KnightsbridgeAIQ/kxco-post-quantum-verifiers/actions/workflows/cross-lang.yml)
+[![cross-language CI](https://github.com/KnightsbridgeAIQ/kxco-pq-verifiers/actions/workflows/cross-lang.yml/badge.svg)](https://github.com/KnightsbridgeAIQ/kxco-pq-verifiers/actions/workflows/cross-lang.yml)
 [![npm](https://img.shields.io/npm/v/kxco-post-quantum?label=npm)](https://www.npmjs.com/package/kxco-post-quantum)
 [![PyPI](https://img.shields.io/pypi/v/kxco-verify?label=pypi)](https://pypi.org/project/kxco-verify/)
 [![crates.io](https://img.shields.io/crates/v/kxco-verify?label=crates.io)](https://crates.io/crates/kxco-verify)
