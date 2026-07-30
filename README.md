@@ -140,10 +140,12 @@ Every language's test suite asserts identical bytes against this file. Cross-lan
 
 | Language    | PQC library | Why |
 |-------------|-------------|-----|
-| JavaScript  | `@noble/post-quantum` | Audited by Cure53 (2024). Pure JS, no native deps. |
+| JavaScript  | `@noble/post-quantum` | Pure JS, no native deps. Maintainer self-audited; no third-party audit (see the note below). |
 | Python      | `liboqs-python` or `pqcrypto` | Open Quantum Safe / NIST round-finalist implementation, lazy backend detection. |
 | Rust        | `fips204` | Pure-Rust FIPS 204 implementation. No CGo or liboqs build step. |
-| Go          | `cloudflare/circl/sign/mldsa/mldsa65` | Cloudflare's audited cryptography toolkit. Pure Go. |
+| Go          | `cloudflare/circl/sign/mldsa/mldsa65` | Cloudflare's CIRCL cryptography library. Pure Go. |
+
+**On audit status.** None of the four ML-DSA-65 implementations above carries a third-party audit that we can cite. `@noble/post-quantum` has been self-audited by its maintainer; Cure53's 2023 NDS-01 audit of the `@noble` ecosystem covered `ciphers`, `curves` and `hashes`, and did **not** cover the post-quantum package. Earlier revisions of this table stated otherwise, and that was wrong. What this package does give you is cross-implementation agreement: a payload signed in any one language verifies in every other, asserted byte-for-byte against `vectors/vectors.json` in CI on every push. That is a real property, and it is a different property from an audit. Judge it on its own terms.
 
 ## License
 
