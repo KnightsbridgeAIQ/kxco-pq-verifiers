@@ -147,6 +147,12 @@ Every language's test suite asserts identical bytes against this file. Cross-lan
 
 **On audit status.** None of the four ML-DSA-65 implementations above carries a third-party audit that we can cite. `@noble/post-quantum` has been self-audited by its maintainer; Cure53's 2023 NDS-01 audit of the `@noble` ecosystem covered `ciphers`, `curves` and `hashes`, and did **not** cover the post-quantum package. Earlier revisions of this table stated otherwise, and that was wrong. What this package does give you is cross-implementation agreement: a payload signed in any one language verifies in every other, asserted byte-for-byte against `vectors/vectors.json` in CI on every push. That is a real property, and it is a different property from an audit. Judge it on its own terms.
 
+## Security
+
+To report a vulnerability, email **john@knightsbridgelaw.com** with subject `[kxco-pq-verifiers] SECURITY: <one-line summary>`. Do not open a public issue for a security report. Acknowledgement within 2 business days, triage decision within 5. A cross-language verification break, where a payload signed in one language is accepted or rejected inconsistently in another, is in scope and we treat it as a correctness bug in the cryptographic path, not a compatibility nit.
+
+Full policy, including safe harbour for good-faith research and how we prioritise: <https://kxco.ai/security>. See also [`SECURITY.md`](./SECURITY.md).
+
 ## License
 
 MIT. See individual language directories for any additional notices required by their dependencies.
