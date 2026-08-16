@@ -14,7 +14,13 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-oqs = ["liboqs-python>=0.10"]
+# Bounded deliberately. liboqs-python reassigns algorithm identifiers between
+# releases: 0.16.0 removed SPHINCS+ in favour of SLH-DSA and renamed FrodoKEM
+# to ephemeral FrodoKEM, with the salted variant taking the OLD names. An
+# unbounded range therefore lets a pinned identifier silently select a
+# different algorithm. 0.16.0 is also the only release on PyPI today, so this
+# bound excludes nothing that was installable.
+oqs = ["liboqs-python>=0.16.0,<0.17"]
 pqcrypto = ["pqcrypto>=0.3"]
 dev = ["pytest>=7"]
 
