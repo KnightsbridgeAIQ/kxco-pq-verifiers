@@ -21,7 +21,17 @@ jobs:
         run: node -e "import('kxco-post-quantum').then(m => console.log(Object.keys(m)))"
 
   go:
-    name: Go / 1.22
+    # The version is READ FROM go.mod rather than written here, and that is the
+    # whole fix. This job pinned '1.22' while go/go.mod has required a newer Go
+    # since 19 July, and it passed anyway because Go silently downloads the
+    # toolchain a module asks for. actions/setup-go@v7 sets GOTOOLCHAIN=local,
+    # which turns that download off, and the mismatch surfaced immediately as
+    # "go.mod requires go >= 1.25.0 (running go 1.22.12; GOTOOLCHAIN=local)".
+    #
+    # Pinning the right number here would fix today and drift again the next time
+    # a dependency raises the go directive, which is exactly how this happened.
+    # go-version-file cannot drift: there is one number and the module owns it.
+    name: Go
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,7 +40,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.22'
+          go-version-file: go/go.mod
       - run: go mod tidy
       - run: go test ./...
 
