@@ -11,7 +11,7 @@ jobs:
     name: JavaScript / Node 20
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
@@ -37,7 +37,7 @@ jobs:
       run:
         working-directory: ./go
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7
         with:
           go-version-file: go/go.mod
@@ -54,7 +54,7 @@ jobs:
       matrix:
         python: ['3.10', '3.11', '3.12']
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
@@ -67,7 +67,7 @@ jobs:
       run:
         working-directory: ./rust
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --all-features
 
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [javascript, go, python, rust]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Confirm vectors.json is byte-identical across language dirs
         run: |
           sha256sum vectors/vectors.json
