@@ -4,7 +4,7 @@ All notable changes to the multi-language verifiers are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 each language uses its own SemVer line.
 
-## [Unreleased]
+## [Go 1.2.0, Python 1.2.0, Rust 1.2.0] 2026-10-05
 
 ### Added
 - **ML-DSA-87 verification in the Go, Python and Rust verifiers.** The pinned public key decides the parameter set: 1952 bytes is ML-DSA-65, 2592 bytes is ML-DSA-87, and any other size is refused. The signature must be the size of the key's set (3309 or 4627 bytes). `X-KXCO-PQ-Signature` may carry `ml-dsa-87=<hex>`, mirroring `ml-dsa-65=<hex>`; a prefix that names the other set from the key's is refused, and a bare hex value takes its set from the key. `PinnedKids` / `pinned_kids` may hold keys of both sets. No public API changes. ML-DSA-65 results are unchanged, apart from the Python `pqcrypto` fix below.
