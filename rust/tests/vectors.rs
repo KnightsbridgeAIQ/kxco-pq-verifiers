@@ -2,7 +2,7 @@
 //! asserts that this Rust implementation produces identical outputs to the
 //! JavaScript, Go, and Python implementations.
 
-use kxco_verify::{envelope, fingerprint, hmac_hex, kid_equals, verify_hmac};
+use kxco_verify::{envelope, fingerprint, hmac_hex, kid_equals, verify_hmac, verify_pq};
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -12,6 +12,31 @@ struct Vectors {
     webhook_envelope: Vec<EnvelopeVec>,
     webhook_hmac:     Vec<HmacVec>,
     fingerprint:      Vec<FingerprintVec>,
+    ml_dsa_verify:    MlDsaVerify,
+}
+
+#[derive(Debug, Deserialize)]
+struct MlDsaVerify {
+    public_keys: std::collections::HashMap<String, BytesHex>,
+    signatures:  std::collections::HashMap<String, BytesHex>,
+    cases:       Vec<MlDsaCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BytesHex {
+    bytes: usize,
+    hex:   String,
+}
+
+#[derive(Debug, Deserialize)]
+struct MlDsaCase {
+    name:          String,
+    public_key:    String,
+    signature:     String,
+    header_prefix: String,
+    timestamp:     String,
+    body_utf8:     String,
+    expect_valid:  bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -206,4 +231,77 @@ fn pinned_kids_kid_match_resolves() {
     assert_eq!(r.resolved_kid.as_deref(), Some("aaaaaaaaaaaaaaaa"));
     assert!(!r.pq_ok, "expected pq_ok=false (no signature provided)");
     assert!(r.timestamp_ok);
+}
+
+// ── ML-DSA-65 and ML-DSA-87 verification vectors ─────────────────────────
+
+/// Resolve a case's key and header, checking the declared byte counts so a
+/// damaged vectors file cannot pass.
+fn ml_dsa_case_inputs(v: &MlDsaVerify, c: &MlDsaCase) -> (Vec<u8>, String) {
+    let k = v.public_keys.get(&c.public_key).unwrap_or_else(|| panic!("unknown public_key {}", c.public_key));
+    let s = v.signatures.get(&c.signature).unwrap_or_else(|| panic!("unknown signature {}", c.signature));
+    let pk = hex::decode(&k.hex).expect("public key hex");
+    let sig = hex::decode(&s.hex).expect("signature hex");
+    assert_eq!(pk.len(), k.bytes, "public key {}", c.public_key);
+    assert_eq!(sig.len(), s.bytes, "signature {}", c.signature);
+    (pk, format!("{}{}", c.header_prefix, s.hex))
+}
+
+#[test]
+fn ml_dsa_verify_vectors() {
+    let v = load_vectors().ml_dsa_verify;
+    assert!(!v.cases.is_empty(), "no ml_dsa_verify cases in vectors.json");
+    let mut failures = Vec::new();
+    for c in &v.cases {
+        let (pk, header) = ml_dsa_case_inputs(&v, c);
+        let got = verify_pq(&pk, &c.timestamp, c.body_utf8.as_bytes(), &header);
+        if got != c.expect_valid {
+            failures.push(format!("[ml_dsa_verify:{}] expected {}, got {}", c.name, c.expect_valid, got));
+        }
+    }
+    assert!(failures.is_empty(), "{} case(s) failed:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A rotation set may hold an ML-DSA-65 and an ML-DSA-87 key side by side;
+/// each delivery is verified under the set of the key its kid resolves to.
+#[test]
+fn pinned_kids_mixed_ml_dsa_parameter_sets() {
+    let v = load_vectors().ml_dsa_verify;
+    let find = |name: &str| {
+        v.cases.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("missing case {}", name))
+    };
+    let c87 = find("ML-DSA-87 valid, ml-dsa-87= prefix");
+    let c65 = find("ML-DSA-65 valid, ml-dsa-65= prefix (unchanged behaviour)");
+    let (pk87, h87) = ml_dsa_case_inputs(&v, c87);
+    let (pk65, h65) = ml_dsa_case_inputs(&v, c65);
+    let (kid87, kid65) = (fingerprint(&pk87), fingerprint(&pk65));
+    let kids: Vec<(&str, &[u8])> = vec![(kid87.as_str(), pk87.as_slice()), (kid65.as_str(), pk65.as_slice())];
+
+    let deliver = |kid: &str, header: &str, c: &MlDsaCase| {
+        let headers = make_headers(&[
+            ("x-kxco-timestamp",    c.timestamp.as_str()),
+            ("x-kxco-pq-kid",       kid),
+            ("x-kxco-pq-signature", header),
+        ]);
+        verify_delivery(VerifyDeliveryArgs {
+            headers:        &headers,
+            raw_body:       c.body_utf8.as_bytes(),
+            hmac_secret:    None,
+            pq_public_key:  None,
+            pinned_kid:     None,
+            pinned_kids:    Some(&kids),
+            window_seconds: 0,
+            now_unix:       c.timestamp.parse().expect("timestamp"),
+        })
+    };
+
+    for (name, kid, header, c) in [("ML-DSA-87", &kid87, &h87, c87), ("ML-DSA-65", &kid65, &h65, c65)] {
+        let r = deliver(kid, header, c);
+        assert!(r.pq_ok && r.ok(), "{}: expected pq_ok, got {:?}", name, r);
+        assert_eq!(r.resolved_kid.as_deref(), Some(kid.as_str()), "{}", name);
+    }
+
+    // An ML-DSA-87 signature under the ML-DSA-65 key's kid is refused.
+    let r = deliver(&kid65, &h87, c87);
+    assert!(!r.pq_ok && !r.ok(), "ML-DSA-87 header under ML-DSA-65 kid: expected refusal, got {:?}", r);
 }

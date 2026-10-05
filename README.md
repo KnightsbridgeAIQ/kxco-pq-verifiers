@@ -114,9 +114,12 @@ All four implementations agree on a single envelope:
 Envelope:               timestamp + "." + raw_body
 X-KXCO-Signature:       sha256=<HMAC-SHA-256 hex>
 X-KXCO-PQ-Signature:    ml-dsa-65=<ML-DSA-65 hex, 6618 chars>
+                     or ml-dsa-87=<ML-DSA-87 hex, 9254 chars>
 X-KXCO-PQ-Kid:          16-hex SHA-256 prefix of the platform public key
 X-KXCO-Timestamp:       Unix seconds
 ```
+
+The pinned public key decides the ML-DSA parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87; any other size is refused. The signature must be the size of that set (3309 or 4627 bytes). A header prefix that names the other set from the key's is refused; a bare hex value takes its set from the key.
 
 Either signature alone is sufficient; verifying both is defence-in-depth. The HMAC layer covers ecosystem compatibility; the ML-DSA layer covers non-repudiation and post-quantum forgery resistance.
 
@@ -133,6 +136,7 @@ Default replay window: 5 minutes. Configurable.
 - `mlKem.encapsulate` round-trip
 - `fingerprint` (16-hex kid)
 - `webhook.envelope` / `webhook.hmacHex` / hybrid round-trip
+- `ml_dsa_verify`: ML-DSA-65 and ML-DSA-87 signatures over the webhook envelope, including the refusals (tampered signature, altered message, wrong key, wrong key or signature size, and a key of one set presented with the other set's signature or prefix)
 
 Every language's test suite asserts identical bytes against this file. Cross-language compatibility is enforced by CI on every push.
 
@@ -143,7 +147,7 @@ Every language's test suite asserts identical bytes against this file. Cross-lan
 | JavaScript  | `@noble/post-quantum` | Pure JS, no native deps. Maintainer self-audited; no third-party audit (see the note below). |
 | Python      | `liboqs-python` or `pqcrypto` | Open Quantum Safe / NIST round-finalist implementation, lazy backend detection. |
 | Rust        | `fips204` | Pure-Rust FIPS 204 implementation. No CGo or liboqs build step. |
-| Go          | `cloudflare/circl/sign/mldsa/mldsa65` | Cloudflare's CIRCL cryptography library. Pure Go. |
+| Go          | `cloudflare/circl/sign/mldsa/mldsa65`, `mldsa87` | Cloudflare's CIRCL cryptography library. Pure Go. |
 
 **On audit status.** None of the four ML-DSA-65 implementations above carries a third-party audit that we can cite. `@noble/post-quantum` has been self-audited by its maintainer; Cure53's 2023 NDS-01 audit of the `@noble` ecosystem covered `ciphers`, `curves` and `hashes`, and did **not** cover the post-quantum package. Earlier revisions of this table stated otherwise, and that was wrong. What this package does give you is cross-implementation agreement: a payload signed in any one language verifies in every other, asserted byte-for-byte against `vectors/vectors.json` in CI on every push. That is a real property, and it is a different property from an audit. Judge it on its own terms.
 

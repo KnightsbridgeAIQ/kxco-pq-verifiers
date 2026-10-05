@@ -53,7 +53,7 @@ cargo test
 
 This runs the shared vector tests against `vectors.json`. Expected: all tests pass — proving the Rust implementation produces identical outputs to the JavaScript, Go, and Python verifiers.
 
-The ML-DSA verification uses the pure-Rust [`fips204`](https://crates.io/crates/fips204) crate. No C dependencies; no liboqs build step.
+The ML-DSA verification uses the pure-Rust [`fips204`](https://crates.io/crates/fips204) crate. No C dependencies; no liboqs build step. The pinned public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87.
 
 ## License
 

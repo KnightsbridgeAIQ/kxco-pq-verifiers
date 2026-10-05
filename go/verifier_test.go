@@ -16,6 +16,31 @@ type vectorFile struct {
 	WebhookEnvelope     []envelopeVector `json:"webhook_envelope"`
 	WebhookHmac         []hmacVector     `json:"webhook_hmac"`
 	Fingerprint         []fingerprintVector `json:"fingerprint"`
+	MlDsaVerify         mlDsaVerifyVectors  `json:"ml_dsa_verify"`
+}
+
+type mlDsaVerifyVectors struct {
+	PublicKeys map[string]struct {
+		Algorithm *string `json:"algorithm"`
+		Bytes     int     `json:"bytes"`
+		Hex       string  `json:"hex"`
+	} `json:"public_keys"`
+	Signatures map[string]struct {
+		Bytes int    `json:"bytes"`
+		Hex   string `json:"hex"`
+	} `json:"signatures"`
+	Cases []mlDsaVerifyCase `json:"cases"`
+}
+
+type mlDsaVerifyCase struct {
+	Name           string  `json:"name"`
+	PublicKey      string  `json:"public_key"`
+	Signature      string  `json:"signature"`
+	HeaderPrefix   string  `json:"header_prefix"`
+	Timestamp      string  `json:"timestamp"`
+	BodyUtf8       string  `json:"body_utf8"`
+	ExpectValid    bool    `json:"expect_valid"`
+	RefusedBecause *string `json:"refused_because"`
 }
 
 type envelopeVector struct {
@@ -215,5 +240,117 @@ func TestVerifyDeliveryPinnedKidsKidMatchResolves(t *testing.T) {
 	}
 	if !r.TimestampOk {
 		t.Error("expected TimestampOk=true for fresh timestamp")
+	}
+}
+
+// ── ML-DSA-65 and ML-DSA-87 verification vectors ───────────────────────────
+
+// mlDsaCaseInputs resolves a case's key and header from the shared vectors,
+// checking the declared byte counts so a damaged vectors file cannot pass.
+func mlDsaCaseInputs(t *testing.T, v mlDsaVerifyVectors, c mlDsaVerifyCase) ([]byte, string) {
+	t.Helper()
+	k, ok := v.PublicKeys[c.PublicKey]
+	if !ok {
+		t.Fatalf("unknown public_key %q", c.PublicKey)
+	}
+	s, ok := v.Signatures[c.Signature]
+	if !ok {
+		t.Fatalf("unknown signature %q", c.Signature)
+	}
+	pk, err := hex.DecodeString(k.Hex)
+	if err != nil || len(pk) != k.Bytes {
+		t.Fatalf("public key %q: %d bytes, want %d (err %v)", c.PublicKey, len(pk), k.Bytes, err)
+	}
+	sig, err := hex.DecodeString(s.Hex)
+	if err != nil || len(sig) != s.Bytes {
+		t.Fatalf("signature %q: %d bytes, want %d (err %v)", c.Signature, len(sig), s.Bytes, err)
+	}
+	return pk, c.HeaderPrefix + s.Hex
+}
+
+func TestMLDSAVerifyVectors(t *testing.T) {
+	v := loadVectors(t).MlDsaVerify
+	if len(v.Cases) == 0 {
+		t.Fatal("no ml_dsa_verify cases in vectors.json")
+	}
+	// Refusals the API reports as an error rather than a plain false.
+	errReasons := map[string]bool{
+		"declared algorithm disagrees with the key": true,
+		"public key size is neither 1952 nor 2592":  true,
+	}
+	for _, c := range v.Cases {
+		c := c
+		t.Run(c.Name, func(t *testing.T) {
+			pk, header := mlDsaCaseInputs(t, v, c)
+			ok, err := VerifyPQ(pk, c.Timestamp, []byte(c.BodyUtf8), header)
+			if c.ExpectValid {
+				if err != nil || !ok {
+					t.Fatalf("expected valid, got ok=%v err=%v", ok, err)
+				}
+				return
+			}
+			if ok {
+				t.Fatalf("expected refusal (%v), got ok=true", *c.RefusedBecause)
+			}
+			if wantErr := errReasons[*c.RefusedBecause]; wantErr != (err != nil) {
+				t.Fatalf("refused because %q: want error=%v, got err=%v", *c.RefusedBecause, wantErr, err)
+			}
+		})
+	}
+}
+
+// A rotation set may hold an ML-DSA-65 and an ML-DSA-87 key side by side; each
+// delivery is verified under the set of the key its kid resolves to.
+func TestVerifyDeliveryPinnedKidsMixedParameterSets(t *testing.T) {
+	v := loadVectors(t).MlDsaVerify
+	find := func(name string) mlDsaVerifyCase {
+		for _, c := range v.Cases {
+			if c.Name == name {
+				return c
+			}
+		}
+		t.Fatalf("missing case %q", name)
+		return mlDsaVerifyCase{}
+	}
+	c87 := find("ML-DSA-87 valid, ml-dsa-87= prefix")
+	c65 := find("ML-DSA-65 valid, ml-dsa-65= prefix (unchanged behaviour)")
+	pk87, h87 := mlDsaCaseInputs(t, v, c87)
+	pk65, h65 := mlDsaCaseInputs(t, v, c65)
+	kid87, kid65 := Fingerprint(pk87), Fingerprint(pk65)
+	kids := map[string][]byte{kid87: pk87, kid65: pk65}
+	// The vectors carry a fixed 2025 timestamp; widen the window so only the
+	// signature and kid predicates are under test.
+	const window = int64(1) << 40
+
+	deliver := func(kid, header string, c mlDsaVerifyCase) (Result, error) {
+		return VerifyDelivery(VerifyDeliveryArgs{
+			Headers: map[string]string{
+				"x-kxco-timestamp":    c.Timestamp,
+				"x-kxco-pq-kid":       kid,
+				"x-kxco-pq-signature": header,
+			},
+			RawBody:       []byte(c.BodyUtf8),
+			PinnedKids:    kids,
+			WindowSeconds: window,
+		})
+	}
+
+	for _, tc := range []struct {
+		name, kid, header string
+		c                 mlDsaVerifyCase
+	}{
+		{"ML-DSA-87 kid", kid87, h87, c87},
+		{"ML-DSA-65 kid", kid65, h65, c65},
+	} {
+		r, err := deliver(tc.kid, tc.header, tc.c)
+		if err != nil || !r.PqOk || !r.Ok() || r.ResolvedKid != tc.kid {
+			t.Errorf("%s: expected PqOk and ResolvedKid=%s, got %+v err=%v", tc.name, tc.kid, r, err)
+		}
+	}
+
+	// An ML-DSA-87 signature presented under the ML-DSA-65 key's kid is refused.
+	r, err := deliver(kid65, h87, c87)
+	if r.PqOk || r.Ok() || err == nil {
+		t.Errorf("ML-DSA-87 header under ML-DSA-65 kid: expected refusal with error, got %+v err=%v", r, err)
 	}
 }

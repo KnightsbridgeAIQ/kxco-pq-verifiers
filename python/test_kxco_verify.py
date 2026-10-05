@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import warnings
 
 import kxco_verify as kx
 
@@ -138,6 +139,90 @@ def test_verify_delivery_pinned_kids_kid_match_resolves_kid():
     assert r.timestamp_ok is True
 
 
+# ── ML-DSA-65 and ML-DSA-87 verification vectors ─────────────────────────────
+#
+# Structural refusals (key size, declared algorithm, signature size) need no
+# backend. The cryptographic cases need oqs or pqcrypto; without one they are
+# skipped with a warning, unless KXCO_REQUIRE_PQ_BACKEND=1, which CI sets so a
+# missing backend fails instead of passing quietly.
+
+REQUIRE_PQ_BACKEND = os.environ.get("KXCO_REQUIRE_PQ_BACKEND") == "1"
+SKIPPED_NO_BACKEND = []
+
+
+def _ml_dsa_case_inputs(v, case):
+    """Resolve a case's key and header, checking the declared byte counts."""
+    k = v["public_keys"][case["public_key"]]
+    s = v["signatures"][case["signature"]]
+    pk = bytes.fromhex(k["hex"])
+    sig = bytes.fromhex(s["hex"])
+    assert len(pk) == k["bytes"], f"public key {case['public_key']}: {len(pk)} bytes, want {k['bytes']}"
+    assert len(sig) == s["bytes"], f"signature {case['signature']}: {len(sig)} bytes, want {s['bytes']}"
+    return pk, case["header_prefix"] + s["hex"]
+
+
+def _skip_no_backend(label):
+    if REQUIRE_PQ_BACKEND:
+        raise AssertionError(f"[{label}] no ML-DSA backend installed and KXCO_REQUIRE_PQ_BACKEND=1")
+    SKIPPED_NO_BACKEND.append(label)
+    warnings.warn(f"[{label}] skipped: no ML-DSA backend installed")
+
+
+def test_ml_dsa_verify_vectors():
+    v = load_vectors()["ml_dsa_verify"]
+    assert v["cases"], "no ml_dsa_verify cases in vectors.json"
+    failures = []
+    for case in v["cases"]:
+        pk, header = _ml_dsa_case_inputs(v, case)
+        try:
+            got = kx.verify_pq(pk, case["timestamp"], case["body_utf8"].encode("utf-8"), header)
+        except RuntimeError:
+            _skip_no_backend(f"ml_dsa_verify:{case['name']}")
+            continue
+        if got is not case["expect_valid"]:
+            failures.append(f"[ml_dsa_verify:{case['name']}] expected {case['expect_valid']}, got {got!r}")
+    assert not failures, f"{len(failures)} case(s) failed: " + "; ".join(failures)
+
+
+def test_verify_delivery_pinned_kids_mixed_parameter_sets():
+    """A rotation set may hold an ML-DSA-65 and an ML-DSA-87 key side by side;
+    each delivery is verified under the set of the key its kid resolves to."""
+    v = load_vectors()["ml_dsa_verify"]
+    cases = {c["name"]: c for c in v["cases"]}
+    c87 = cases["ML-DSA-87 valid, ml-dsa-87= prefix"]
+    c65 = cases["ML-DSA-65 valid, ml-dsa-65= prefix (unchanged behaviour)"]
+    pk87, h87 = _ml_dsa_case_inputs(v, c87)
+    pk65, h65 = _ml_dsa_case_inputs(v, c65)
+    kid87, kid65 = kx.fingerprint(pk87), kx.fingerprint(pk65)
+    kids = {kid87: pk87, kid65: pk65}
+
+    def deliver(kid, header, case):
+        return kx.verify_delivery(
+            headers={
+                "x-kxco-timestamp": case["timestamp"],
+                "x-kxco-pq-kid": kid,
+                "x-kxco-pq-signature": header,
+            },
+            raw_body=case["body_utf8"].encode("utf-8"),
+            pinned_kids=kids,
+            now_unix=int(case["timestamp"]),
+        )
+
+    # An ML-DSA-87 signature under the ML-DSA-65 key's kid is refused before
+    # any backend is needed.
+    r = deliver(kid65, h87, c87)
+    assert r.pq_ok is False and r.ok is False, f"ML-DSA-87 header under ML-DSA-65 kid: expected refusal, got {r}"
+
+    for name, kid, header, case in (("ML-DSA-87", kid87, h87, c87), ("ML-DSA-65", kid65, h65, c65)):
+        try:
+            r = deliver(kid, header, case)
+        except RuntimeError:
+            _skip_no_backend(f"pinned_kids {name}")
+            continue
+        assert r.pq_ok is True and r.ok is True, f"{name}: expected pq_ok, got {r}"
+        assert r.resolved_kid == kid, f"{name}: expected resolved_kid={kid}, got {r.resolved_kid!r}"
+
+
 if __name__ == "__main__":
     # Plain runner — no pytest required
     tests = [
@@ -150,6 +235,8 @@ if __name__ == "__main__":
         ("pinned_kids_mutual_exclusion",   test_verify_delivery_pinned_kids_rejects_mixed_with_singular),
         ("pinned_kids_kid_mismatch",       test_verify_delivery_pinned_kids_kid_mismatch_sets_kid_not_ok),
         ("pinned_kids_kid_match_resolves", test_verify_delivery_pinned_kids_kid_match_resolves_kid),
+        ("ml_dsa_verify_vectors",          test_ml_dsa_verify_vectors),
+        ("pinned_kids_mixed_ml_dsa_sets",  test_verify_delivery_pinned_kids_mixed_parameter_sets),
     ]
     failed = 0
     for name, fn in tests:
@@ -159,6 +246,9 @@ if __name__ == "__main__":
         except AssertionError as e:
             failed += 1
             print(f"  FAIL  {name}: {e}")
+    if SKIPPED_NO_BACKEND:
+        print(f"  SKIP  {len(SKIPPED_NO_BACKEND)} ML-DSA checks need a backend "
+              f"(pip install pqcrypto or liboqs-python): {', '.join(SKIPPED_NO_BACKEND)}")
     if failed:
         sys.exit(1)
     print(f"\nAll {len(tests)} vector tests passed.")
