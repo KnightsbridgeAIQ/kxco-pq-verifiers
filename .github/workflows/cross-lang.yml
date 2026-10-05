@@ -58,7 +58,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
+      # The ML-DSA vectors need a backend. KXCO_REQUIRE_PQ_BACKEND turns a
+      # missing backend into a failure instead of a skipped case.
+      - run: pip install pqcrypto==1.0.0
       - run: python test_kxco_verify.py
+        env:
+          KXCO_REQUIRE_PQ_BACKEND: '1'
 
   rust:
     name: Rust / stable

@@ -1,6 +1,6 @@
 [package]
 name        = "kxco-verify"
-version     = "1.1.0"
+version     = "1.2.0"
 edition     = "2021"
 license     = "MIT"
 description = "Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme"

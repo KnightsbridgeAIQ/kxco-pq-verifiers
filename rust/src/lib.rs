@@ -1,5 +1,7 @@
 //! kxco-verify — receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65
-//! webhook signature scheme.
+//! webhook signature scheme, and for its ML-DSA-87 form. The receiver's
+//! pinned public key decides which parameter set a signature is verified
+//! under.
 //!
 //! Wire-format compatible with `@kxco/post-quantum` (npm), the Go verifier,
 //! and the Python verifier.
@@ -10,6 +12,7 @@
 //! Envelope:               timestamp + "." + raw_body
 //! X-KXCO-Signature:       sha256=<HMAC-SHA-256 hex>
 //! X-KXCO-PQ-Signature:    ml-dsa-65=<ML-DSA-65 hex, 6618 chars>
+//!                      or ml-dsa-87=<ML-DSA-87 hex, 9254 chars>
 //! X-KXCO-PQ-Kid:          16-hex SHA-256 prefix of the platform public key
 //! X-KXCO-Timestamp:       Unix seconds
 //! ```
@@ -83,39 +86,77 @@ pub fn verify_hmac(secret: &[u8], timestamp: &str, raw_body: &[u8], sig_header: 
     expected.as_bytes().ct_eq(given.as_bytes()).into()
 }
 
-/// Verify the X-KXCO-PQ-Signature ML-DSA-65 signature.
+/// Verify the X-KXCO-PQ-Signature ML-DSA signature.
 ///
-/// Accepts the header value with or without the `ml-dsa-65=` prefix.
-/// `public_key` must be the raw 1952-byte ML-DSA-65 public key (decoded from
-/// the `publicKey` hex field of `/.well-known/kxco-pq-pubkey`).
+/// `public_key` is the raw ML-DSA public key (decoded from the `publicKey`
+/// hex field of `/.well-known/kxco-pq-pubkey`) and it decides the parameter
+/// set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87. Any other size
+/// returns `false`.
+///
+/// The header value may be bare hex or carry an `ml-dsa-65=` or `ml-dsa-87=`
+/// prefix. A prefix naming the other parameter set from the key's returns
+/// `false`, as does a signature that is not the size of the key's set (3309
+/// bytes for ML-DSA-65, 4627 for ML-DSA-87).
 ///
 /// Returns `false` on any error (bad hex, invalid key, signature mismatch).
 pub fn verify_pq(public_key: &[u8], timestamp: &str, raw_body: &[u8], sig_header: &str) -> bool {
-    use fips204::ml_dsa_65;
     use fips204::traits::{SerDes, Verifier};
+    use fips204::{ml_dsa_65, ml_dsa_87};
 
-    let hex_sig = sig_header.strip_prefix("ml-dsa-65=").unwrap_or(sig_header);
+    const PREFIX_65: &str = "ml-dsa-65=";
+    const PREFIX_87: &str = "ml-dsa-87=";
+
+    // The key decides the parameter set: FIPS 204 public keys are exactly
+    // 1952 bytes (ML-DSA-65) or 2592 bytes (ML-DSA-87).
+    let key_prefix = match public_key.len() {
+        1952 => PREFIX_65,
+        2592 => PREFIX_87,
+        _ => return false,
+    };
+
+    // A declared algorithm must agree with the key.
+    let hex_sig = match [PREFIX_65, PREFIX_87].into_iter().find(|p| sig_header.starts_with(p)) {
+        Some(declared) if declared != key_prefix => return false,
+        Some(declared) => &sig_header[declared.len()..],
+        None => sig_header,
+    };
     let sig_bytes = match hex::decode(hex_sig) {
         Ok(b) => b,
         Err(_) => return false,
     };
-
-    // FIPS-204 ML-DSA-65 public key is exactly 1952 bytes.
-    let pk_arr: [u8; 1952] = match public_key.try_into() {
-        Ok(a) => a,
-        Err(_) => return false,
-    };
-    let sig_arr: [u8; 3309] = match sig_bytes.as_slice().try_into() {
-        Ok(a) => a,
-        Err(_) => return false,
-    };
-
-    let pk = match ml_dsa_65::PublicKey::try_from_bytes(pk_arr) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
     let env = envelope(timestamp, raw_body);
-    pk.verify(&env, &sig_arr, &[])
+
+    // The fixed-size conversions refuse a signature of the wrong size for the
+    // key's set.
+    if key_prefix == PREFIX_65 {
+        let pk_arr: [u8; 1952] = match public_key.try_into() {
+            Ok(a) => a,
+            Err(_) => return false,
+        };
+        let sig_arr: [u8; 3309] = match sig_bytes.as_slice().try_into() {
+            Ok(a) => a,
+            Err(_) => return false,
+        };
+        let pk = match ml_dsa_65::PublicKey::try_from_bytes(pk_arr) {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        pk.verify(&env, &sig_arr, &[])
+    } else {
+        let pk_arr: [u8; 2592] = match public_key.try_into() {
+            Ok(a) => a,
+            Err(_) => return false,
+        };
+        let sig_arr: [u8; 4627] = match sig_bytes.as_slice().try_into() {
+            Ok(a) => a,
+            Err(_) => return false,
+        };
+        let pk = match ml_dsa_87::PublicKey::try_from_bytes(pk_arr) {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        pk.verify(&env, &sig_arr, &[])
+    }
 }
 
 /// 16-hex kid fingerprint: first 8 bytes of SHA-256 of the public key.

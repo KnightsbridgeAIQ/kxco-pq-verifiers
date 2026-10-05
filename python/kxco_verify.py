@@ -1,5 +1,6 @@
 """kxco_verify — receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65
-webhook signature scheme.
+webhook signature scheme, and for its ML-DSA-87 form. The receiver's pinned
+public key decides which parameter set a signature is verified under.
 
 Wire-format compatible with @kxco/post-quantum (npm), the Go verifier, and the
 Rust verifier.
@@ -7,7 +8,7 @@ Rust verifier.
 The HMAC, envelope, fingerprint, and timestamp paths depend only on the Python
 standard library.
 
-ML-DSA-65 verification requires one of:
+ML-DSA verification requires one of:
     - `oqs`        (Open Quantum Safe Python bindings; pip install oqs)
     - `pqcrypto`   (pip install pqcrypto, with ML-DSA backend)
 The verifier auto-detects the available backend at import time.
@@ -16,11 +17,21 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import importlib
 import time
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
 DEFAULT_REPLAY_WINDOW = 300  # seconds
+
+# ML-DSA parameter sets, keyed by public-key size. The key decides the set:
+# public-key bytes -> (algorithm name, header prefix, signature bytes,
+# pqcrypto module name).
+_ML_DSA_SETS = {
+    1952: ("ML-DSA-65", "ml-dsa-65=", 3309, "ml_dsa_65"),
+    2592: ("ML-DSA-87", "ml-dsa-87=", 4627, "ml_dsa_87"),
+}
+_ML_DSA_PREFIXES = ("ml-dsa-65=", "ml-dsa-87=")
 
 # ── ML-DSA backend detection ────────────────────────────────────────────────
 #
@@ -30,13 +41,12 @@ DEFAULT_REPLAY_WINDOW = 300  # seconds
 # as defence-in-depth that they'll wire up later).
 
 _ml_dsa_backend: Optional[str] = None
-_pqcrypto_ml_dsa = None
 _backend_probed = False
 
 
 def _probe_ml_dsa_backend() -> None:
     """Lazy backend probe. Called from verify_pq only."""
-    global _ml_dsa_backend, _pqcrypto_ml_dsa, _backend_probed
+    global _ml_dsa_backend, _backend_probed
     if _backend_probed:
         return
     _backend_probed = True
@@ -51,11 +61,10 @@ def _probe_ml_dsa_backend() -> None:
         pass
 
     try:
-        from pqcrypto.sign import ml_dsa_65 as _ml_dsa_mod  # type: ignore
-        _pqcrypto_ml_dsa = _ml_dsa_mod
+        from pqcrypto.sign import ml_dsa_65, ml_dsa_87  # type: ignore  # noqa: F401
         _ml_dsa_backend = "pqcrypto"
     except Exception:
-        _pqcrypto_ml_dsa = None
+        pass
 
 
 # ── Envelope + HMAC primitives (pure stdlib) ─────────────────────────────────
@@ -84,18 +93,37 @@ def verify_hmac(secret: bytes, timestamp: str, raw_body: bytes, sig_header: str)
     return hmac.compare_digest(expected, given)
 
 
-# ── ML-DSA-65 verify ─────────────────────────────────────────────────────────
+# ── ML-DSA verify (ML-DSA-65 or ML-DSA-87, chosen by the key) ───────────────
 
 def verify_pq(public_key: bytes, timestamp: str, raw_body: bytes, sig_header: str) -> bool:
-    """Verify the X-KXCO-PQ-Signature ML-DSA-65 signature.
+    """Verify the X-KXCO-PQ-Signature ML-DSA signature.
 
-    Accepts header value with or without the `ml-dsa-65=` prefix.
+    The public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592
+    bytes is ML-DSA-87; any other size returns False. The header value may be
+    bare hex or carry an `ml-dsa-65=` or `ml-dsa-87=` prefix; a prefix naming
+    the other set from the key's returns False, as does a signature that is not
+    the size of the key's set (3309 or 4627 bytes).
+
     Returns False on any error (invalid hex, invalid key, signature mismatch).
+    Raises RuntimeError only when no ML-DSA backend is installed.
     """
-    hex_sig = sig_header[len("ml-dsa-65="):] if sig_header.startswith("ml-dsa-65=") else sig_header
+    ml_set = _ML_DSA_SETS.get(len(public_key))
+    if ml_set is None:
+        return False
+    algorithm, prefix, sig_size, pqcrypto_module = ml_set
+
+    hex_sig = sig_header
+    for declared in _ML_DSA_PREFIXES:
+        if sig_header.startswith(declared):
+            if declared != prefix:
+                return False
+            hex_sig = sig_header[len(declared):]
+            break
     try:
         sig_bytes = bytes.fromhex(hex_sig)
     except ValueError:
+        return False
+    if len(sig_bytes) != sig_size:
         return False
 
     env = envelope(timestamp, raw_body)
@@ -104,20 +132,23 @@ def verify_pq(public_key: bytes, timestamp: str, raw_body: bytes, sig_header: st
     if _ml_dsa_backend == "oqs":
         try:
             import oqs  # type: ignore
-            verifier = oqs.Signature("ML-DSA-65")
+            verifier = oqs.Signature(algorithm)
             return verifier.verify(env, sig_bytes, public_key)
         except Exception:
             return False
 
     if _ml_dsa_backend == "pqcrypto":
         try:
-            _pqcrypto_ml_dsa.verify(public_key, sig_bytes + env)
-            return True
+            module = importlib.import_module("pqcrypto.sign." + pqcrypto_module)
+            # pqcrypto 0.3.x returns True/False; 1.x returns None and raises on
+            # failure. Anything else is treated as a failure.
+            result = module.verify(public_key, env, sig_bytes)
+            return result is None or result is True
         except Exception:
             return False
 
     raise RuntimeError(
-        "No ML-DSA-65 backend available. Install one of:\n"
+        "No ML-DSA backend available. Install one of:\n"
         "  pip install liboqs-python    # Open Quantum Safe (with liboqs built locally)\n"
         "  pip install pqcrypto         # pqcrypto with ML-DSA backend"
     )

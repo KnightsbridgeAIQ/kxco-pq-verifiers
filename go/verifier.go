@@ -1,5 +1,7 @@
 // Package kxcoverify is a receiver-side verifier for the KXCO hybrid HMAC +
-// ML-DSA-65 webhook signature scheme.
+// ML-DSA-65 webhook signature scheme, and for its ML-DSA-87 form. The
+// receiver's pinned public key decides which parameter set a signature is
+// verified under.
 //
 // Wire format is documented in the parent repository's README. The same wire
 // format is implemented in @kxco/post-quantum (npm), the Python verifier, and
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
+	"github.com/cloudflare/circl/sign/mldsa/mldsa87"
 )
 
 // DefaultReplayWindow is the time window (seconds) within which a delivery
@@ -74,24 +77,82 @@ func VerifyHMAC(secret []byte, timestamp string, rawBody []byte, sigHeader strin
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(given)) == 1
 }
 
-// VerifyPQ verifies the X-KXCO-PQ-Signature ML-DSA-65 signature.
-// Accepts the header value with or without the "ml-dsa-65=" prefix.
-// publicKey must be the 1952-byte raw ML-DSA-65 public key (decoded from the
-// hex value of /.well-known/kxco-pq-pubkey).
+// mlDsaSet is one ML-DSA parameter set the verifier accepts.
+type mlDsaSet struct {
+	name    string // header prefix without the "=", e.g. "ml-dsa-65"
+	label   string // e.g. "ML-DSA-65"
+	sigSize int
+	verify  func(publicKey, msg, sig []byte) (bool, error)
+}
+
+var (
+	mlDsa65Set = mlDsaSet{name: "ml-dsa-65", label: "ML-DSA-65", sigSize: mldsa65.SignatureSize,
+		verify: func(publicKey, msg, sig []byte) (bool, error) {
+			var pk mldsa65.PublicKey
+			if err := pk.UnmarshalBinary(publicKey); err != nil {
+				return false, fmt.Errorf("invalid ML-DSA-65 public key: %w", err)
+			}
+			return mldsa65.Verify(&pk, msg, nil, sig), nil
+		}}
+	mlDsa87Set = mlDsaSet{name: "ml-dsa-87", label: "ML-DSA-87", sigSize: mldsa87.SignatureSize,
+		verify: func(publicKey, msg, sig []byte) (bool, error) {
+			var pk mldsa87.PublicKey
+			if err := pk.UnmarshalBinary(publicKey); err != nil {
+				return false, fmt.Errorf("invalid ML-DSA-87 public key: %w", err)
+			}
+			return mldsa87.Verify(&pk, msg, nil, sig), nil
+		}}
+)
+
+// mlDsaSetForPublicKey picks the parameter set from the public key size:
+// 1952 bytes is ML-DSA-65, 2592 bytes is ML-DSA-87, anything else is refused.
+func mlDsaSetForPublicKey(publicKey []byte) (mlDsaSet, error) {
+	switch len(publicKey) {
+	case mldsa65.PublicKeySize:
+		return mlDsa65Set, nil
+	case mldsa87.PublicKeySize:
+		return mlDsa87Set, nil
+	}
+	return mlDsaSet{}, fmt.Errorf("invalid ML-DSA public key: %d bytes, want %d (ML-DSA-65) or %d (ML-DSA-87)",
+		len(publicKey), mldsa65.PublicKeySize, mldsa87.PublicKeySize)
+}
+
+// VerifyPQ verifies the X-KXCO-PQ-Signature ML-DSA signature.
+//
+// publicKey is the raw ML-DSA public key (decoded from the hex value of
+// /.well-known/kxco-pq-pubkey) and it decides the parameter set: 1952 bytes
+// is ML-DSA-65 and 2592 bytes is ML-DSA-87. Any other size is an error.
+//
+// The header value may be bare hex or carry an "ml-dsa-65=" or "ml-dsa-87="
+// prefix. A prefix naming the other parameter set from the key's is an error.
+// A signature that is not the size of the key's set (3309 bytes for
+// ML-DSA-65, 4627 for ML-DSA-87) does not verify.
 func VerifyPQ(publicKey []byte, timestamp string, rawBody []byte, sigHeader string) (bool, error) {
-	hexSig := strings.TrimPrefix(sigHeader, "ml-dsa-65=")
+	set, err := mlDsaSetForPublicKey(publicKey)
+	if err != nil {
+		return false, err
+	}
+
+	hexSig := sigHeader
+	for _, declared := range []mlDsaSet{mlDsa65Set, mlDsa87Set} {
+		if rest, found := strings.CutPrefix(sigHeader, declared.name+"="); found {
+			if declared.name != set.name {
+				return false, fmt.Errorf("signature header declares %s but the public key is %s", declared.label, set.label)
+			}
+			hexSig = rest
+			break
+		}
+	}
+
 	sigBytes, err := hex.DecodeString(hexSig)
 	if err != nil {
-		return false, fmt.Errorf("ml-dsa-65 signature is not hex: %w", err)
+		return false, fmt.Errorf("%s signature is not hex: %w", set.name, err)
+	}
+	if len(sigBytes) != set.sigSize {
+		return false, nil
 	}
 
-	var pk mldsa65.PublicKey
-	if err := pk.UnmarshalBinary(publicKey); err != nil {
-		return false, fmt.Errorf("invalid ML-DSA-65 public key: %w", err)
-	}
-
-	env := Envelope(timestamp, rawBody)
-	return mldsa65.Verify(&pk, env, nil, sigBytes), nil
+	return set.verify(publicKey, Envelope(timestamp, rawBody), sigBytes)
 }
 
 // Fingerprint returns the 16-hex kid of a public key: first 8 bytes of SHA-256.
@@ -115,7 +176,8 @@ type VerifyDeliveryArgs struct {
 	HMACSecret    []byte // optional: omit to skip HMAC check
 	PQPublicKey   []byte // optional: omit to skip PQ check
 	PinnedKid     string // required when PQPublicKey is set
-	// PinnedKids is a map of kid hex → raw 1952-byte ML-DSA-65 pubkey.
+	// PinnedKids is a map of kid hex → raw ML-DSA pubkey (1952 bytes for
+	// ML-DSA-65, 2592 bytes for ML-DSA-87; the two may be mixed).
 	// When set, the verifier looks up the incoming X-KXCO-PQ-Kid header
 	// against the map and uses the matched pubkey. Mutually exclusive
 	// with PQPublicKey / PinnedKid (combining them returns an error).

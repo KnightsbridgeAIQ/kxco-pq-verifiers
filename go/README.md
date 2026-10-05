@@ -57,7 +57,7 @@ cd go
 go test ./...
 ```
 
-The full ML-DSA-65 verification depends on Cloudflare's `circl/sign/dilithium/mode3`. `go mod tidy` will pull it on first run.
+The ML-DSA verification depends on Cloudflare's `circl/sign/mldsa/mldsa65` and `circl/sign/mldsa/mldsa87`. `go mod tidy` will pull them on first run. The pinned public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87.
 
 ## Wire format
 
@@ -65,7 +65,7 @@ The full ML-DSA-65 verification depends on Cloudflare's `circl/sign/dilithium/mo
 |---|---|
 | `X-KXCO-Timestamp`   | Unix seconds (string) |
 | `X-KXCO-Signature`    | `sha256=<HMAC-SHA-256 hex>` |
-| `X-KXCO-PQ-Signature` | `ml-dsa-65=<ML-DSA-65 hex, 6618 chars>` |
+| `X-KXCO-PQ-Signature` | `ml-dsa-65=<ML-DSA-65 hex, 6618 chars>` or `ml-dsa-87=<ML-DSA-87 hex, 9254 chars>`; the prefix must match the pinned key's set |
 | `X-KXCO-PQ-Kid`       | 16-hex SHA-256 prefix of the platform public key |
 
 Signed envelope: `timestamp + "." + raw_body`

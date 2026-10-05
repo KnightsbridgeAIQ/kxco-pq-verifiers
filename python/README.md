@@ -10,7 +10,7 @@ pip install kxco-verify[oqs]      # adds liboqs-python for ML-DSA
 pip install kxco-verify[pqcrypto] # adds pqcrypto for ML-DSA
 ```
 
-The HMAC, envelope, fingerprint, and timestamp paths use only the Python standard library. ML-DSA-65 verification is lazy-loaded: it only requires a PQC backend when `verify_pq` is actually called.
+The HMAC, envelope, fingerprint, and timestamp paths use only the Python standard library. ML-DSA verification is lazy-loaded: it only requires a PQC backend when `verify_pq` is actually called. The pinned public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87.
 
 ## Quick start (FastAPI)
 
@@ -50,7 +50,7 @@ cd python
 python test_kxco_verify.py
 ```
 
-Expected: `All 6 vector tests passed.`
+Expected: `All 11 vector tests passed.` Without an ML-DSA backend installed, the cryptographic ML-DSA cases are reported as `SKIP`; set `KXCO_REQUIRE_PQ_BACKEND=1` to make a missing backend fail instead.
 
 This verifies that the Python implementation produces identical outputs to `vectors.json` — the same file used by the JavaScript, Go, and Rust verifiers.
 
