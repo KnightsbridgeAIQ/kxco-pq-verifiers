@@ -26,13 +26,13 @@ In scope:
 - Cross-language compatibility: a payload signed in one language MUST verify in every other
 
 Out of scope (report upstream):
-- Bugs in the underlying ML-DSA-65 and ML-DSA-87 implementations
-  (`@noble/post-quantum`, `cloudflare/circl/sign/mldsa/mldsa65` and `mldsa87`, `fips204`,
+- Bugs in the underlying ML-DSA-87 and ML-DSA-65 implementations
+  (`@noble/post-quantum`, `cloudflare/circl/sign/mldsa/mldsa87` and `mldsa65`, `fips204`,
    `liboqs-python`, `pqcrypto`)
 - Bugs in standard-library `HMAC-SHA-256` / `SHA-256`
 
 ## Algorithms used
-- ML-DSA-65 and ML-DSA-87 (NIST FIPS 204 lattice signatures); the pinned public key decides which
+- ML-DSA-87 and ML-DSA-65 (NIST FIPS 204 lattice signatures); the pinned public key decides which
 - HMAC-SHA-256 — FIPS 198-1
 - SHA-256 — FIPS 180-4 (truncated for kid fingerprints)
 

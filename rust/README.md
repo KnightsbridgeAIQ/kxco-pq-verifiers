@@ -1,12 +1,12 @@
 # kxco-verify (Rust)
 
-Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme. Wire-format compatible with `@kxco/post-quantum` (npm), the Go verifier, and the Python verifier.
+Receiver-side verifier for the KXCO hybrid HMAC and ML-DSA webhook signature scheme, ML-DSA-87 and ML-DSA-65 (FIPS 204). Wire-format compatible with `kxco-post-quantum` (npm), the Go verifier, and the Python verifier.
 
 ## Add to your project
 
 ```toml
 [dependencies]
-kxco-verify = "1.0"
+kxco-verify = "1.2"
 ```
 
 ## Quick start (axum)
@@ -33,6 +33,7 @@ async fn webhook(headers: HeaderMap, body: Bytes) -> impl IntoResponse {
         hmac_secret:    Some(hmac_secret.as_bytes()),
         pq_public_key:  Some(&pinned_pubkey),
         pinned_kid:     Some(&pinned_kid),
+        pinned_kids:    None,
         window_seconds: 0, // use default
         now_unix:       now,
     });
@@ -53,7 +54,7 @@ cargo test
 
 This runs the shared vector tests against `vectors.json`. Expected: all tests pass — proving the Rust implementation produces identical outputs to the JavaScript, Go, and Python verifiers.
 
-The ML-DSA verification uses the pure-Rust [`fips204`](https://crates.io/crates/fips204) crate. No C dependencies; no liboqs build step. The pinned public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87.
+The ML-DSA verification uses the pure-Rust [`fips204`](https://crates.io/crates/fips204) crate. No C dependencies; no liboqs build step. The pinned public key decides the parameter set: 2592 bytes is ML-DSA-87 and 1952 bytes is ML-DSA-65.
 
 ## License
 

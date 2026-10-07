@@ -1,6 +1,6 @@
 # kxco-verify (Python)
 
-Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme. Wire-format compatible with `@kxco/post-quantum` (npm), the Go verifier, and the Rust verifier.
+Receiver-side verifier for the KXCO hybrid HMAC and ML-DSA webhook signature scheme, ML-DSA-87 and ML-DSA-65 (FIPS 204). Wire-format compatible with `kxco-post-quantum` (npm), the Go verifier, and the Rust verifier.
 
 ## Install
 
@@ -10,7 +10,7 @@ pip install kxco-verify[oqs]      # adds liboqs-python for ML-DSA
 pip install kxco-verify[pqcrypto] # adds pqcrypto for ML-DSA
 ```
 
-The HMAC, envelope, fingerprint, and timestamp paths use only the Python standard library. ML-DSA verification is lazy-loaded: it only requires a PQC backend when `verify_pq` is actually called. The pinned public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87.
+The HMAC, envelope, fingerprint, and timestamp paths use only the Python standard library. ML-DSA verification is lazy-loaded: it only requires a PQC backend when `verify_pq` is actually called. The pinned public key decides the parameter set: 2592 bytes is ML-DSA-87 and 1952 bytes is ML-DSA-65.
 
 ## Quick start (FastAPI)
 
@@ -19,8 +19,8 @@ from fastapi import FastAPI, Request, HTTPException
 import os
 import kxco_verify as kx
 
-PINNED_KID    = "aa29f37ab7f4b2cf"  # current KXCO production kid (refresh from /.well-known if rotated)
-PINNED_PUBKEY = bytes.fromhex("...3904 hex chars...")
+PINNED_KID    = "1fd9ed3b769c28fc"  # current KXCO production kid, ML-DSA-87 (refresh from /.well-known if rotated)
+PINNED_PUBKEY = bytes.fromhex("...5184 hex chars...")
 HMAC_SECRET   = os.environ["KXCO_WEBHOOK_SECRET"].encode()
 
 app = FastAPI()

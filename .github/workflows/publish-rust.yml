@@ -9,8 +9,8 @@ name: publish-rust
 #
 # To enable this, the project owner must add a trusted publisher at
 # https://crates.io/crates/kxco-verify/settings/publishing with:
-#   Owner:             JackKXCO
-#   Repository name:   kxco-post-quantum-verifiers
+#   Owner:             KnightsbridgeAIQ
+#   Repository name:   kxco-pq-verifiers
 #   Workflow filename: publish-rust.yml
 #   Environment name:  (leave blank)
 #

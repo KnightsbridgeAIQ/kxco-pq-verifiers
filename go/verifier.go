@@ -1,10 +1,10 @@
-// Package kxcoverify is a receiver-side verifier for the KXCO hybrid HMAC +
-// ML-DSA-65 webhook signature scheme, and for its ML-DSA-87 form. The
+// Package kxcoverify is a receiver-side verifier for the KXCO hybrid HMAC and
+// ML-DSA webhook signature scheme, ML-DSA-87 and ML-DSA-65 (FIPS 204). The
 // receiver's pinned public key decides which parameter set a signature is
 // verified under.
 //
 // Wire format is documented in the parent repository's README. The same wire
-// format is implemented in @kxco/post-quantum (npm), the Python verifier, and
+// format is implemented in kxco-post-quantum (npm), the Python verifier, and
 // the Rust verifier — signatures are interchangeable across all four.
 package kxcoverify
 

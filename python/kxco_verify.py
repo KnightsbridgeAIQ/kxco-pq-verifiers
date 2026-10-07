@@ -1,8 +1,8 @@
-"""kxco_verify — receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65
-webhook signature scheme, and for its ML-DSA-87 form. The receiver's pinned
-public key decides which parameter set a signature is verified under.
+"""kxco_verify is a receiver-side verifier for the KXCO hybrid HMAC and ML-DSA
+webhook signature scheme, ML-DSA-87 and ML-DSA-65 (FIPS 204). The receiver's
+pinned public key decides which parameter set a signature is verified under.
 
-Wire-format compatible with @kxco/post-quantum (npm), the Go verifier, and the
+Wire-format compatible with kxco-post-quantum (npm), the Go verifier, and the
 Rust verifier.
 
 The HMAC, envelope, fingerprint, and timestamp paths depend only on the Python
