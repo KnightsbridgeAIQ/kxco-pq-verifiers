@@ -1,11 +1,11 @@
 [package]
 name        = "kxco-verify"
-version     = "1.2.0"
+version     = "1.2.1"
 edition     = "2021"
 license     = "MIT"
-description = "Receiver-side verifier for the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme"
+description = "Receiver-side verifier for the KXCO hybrid HMAC and ML-DSA webhook signature scheme, ML-DSA-87 and ML-DSA-65 (FIPS 204)"
 homepage    = "https://kxco.ai"
-repository  = "https://github.com/JackKXCO/kxco-post-quantum-verifiers"
+repository  = "https://github.com/KnightsbridgeAIQ/kxco-pq-verifiers"
 keywords    = ["post-quantum", "ml-dsa", "dilithium", "webhook", "fips-204"]
 categories  = ["cryptography"]
 readme      = "README.md"
@@ -15,7 +15,7 @@ hex          = "0.4"
 hmac         = "0.12"
 sha2         = "0.10"
 subtle       = "2.5"
-# ML-DSA-65 verification backend — pure-Rust FIPS 204 implementation
+# ML-DSA-87 and ML-DSA-65 verification backend, a pure-Rust FIPS 204 implementation
 fips204      = "0.4"
 
 [dev-dependencies]

@@ -3,14 +3,14 @@ name: publish-python
 # Triggered by pushing a `python/v*` tag, or manual workflow_dispatch.
 #
 # Auth via PyPI Trusted Publishing — PyPI verifies the publish through
-# OIDC against this workflow run (JackKXCO/kxco-post-quantum-verifiers/
+# OIDC against this workflow run (KnightsbridgeAIQ/kxco-pq-verifiers/
 # publish-python.yml). No PYPI_TOKEN secret is involved.
 #
 # To enable this, the project owner must add a pending publisher at
 # https://pypi.org/manage/project/kxco-verify/settings/publishing/
 # with:
-#   Owner:             JackKXCO
-#   Repository name:   kxco-post-quantum-verifiers
+#   Owner:             KnightsbridgeAIQ
+#   Repository name:   kxco-pq-verifiers
 #   Workflow filename: publish-python.yml
 #   Environment name:  (leave blank)
 #

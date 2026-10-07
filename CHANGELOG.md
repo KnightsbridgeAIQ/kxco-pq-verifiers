@@ -4,6 +4,20 @@ All notable changes to the multi-language verifiers are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 each language uses its own SemVer line.
 
+## [Go 1.2.1, Python 1.2.1, Rust 1.2.1] 2026-10-07
+
+These releases carry the ML-DSA-87 verification added in 1.2.0. Verification behaviour is identical to 1.2.0: only documentation and package metadata changed.
+
+### Changed
+- Package descriptions, READMEs and the crate, package and module documentation name ML-DSA-87 first: "ML-DSA-87 and ML-DSA-65 (FIPS 204)". Wire-format listings show the `ml-dsa-87=` header before `ml-dsa-65=`.
+- The root, Go and Python READMEs give the current production kid, `1fd9ed3b769c28fc` (ML-DSA-87). The well-known endpoint lists the earlier ML-DSA-65 kid, `aa29f37ab7f4b2cf`, as verify-only.
+- `Cargo.toml` and `pyproject.toml` give the repository as `https://github.com/KnightsbridgeAIQ/kxco-pq-verifiers`. The setup notes in the publish workflows name the same repository for crates.io and PyPI Trusted Publishing.
+- The READMEs name the npm package as `kxco-post-quantum`.
+- The Rust README asks for `kxco-verify = "1.2"`, the first line that verifies ML-DSA-87.
+
+### Fixed
+- The Rust examples in the READMEs compile against 1.2. The quick start sets `pinned_kids`, and the root README example sets every field instead of calling `Default::default()`, which `VerifyDeliveryArgs` does not implement.
+
 ## [Go 1.2.0, Python 1.2.0, Rust 1.2.0] 2026-10-05
 
 ### Added

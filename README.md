@@ -2,13 +2,13 @@
 
 **Four languages. One wire format. Signatures interchange.**
 
-Receiver-side verifier implementations of the KXCO hybrid HMAC + ML-DSA-65 webhook signature scheme. Every implementation verifies the same `vectors/vectors.json` against the same envelope format. Banks live in Go and Java. Fintech ops live in Python. Systems integrators live in Rust. A JavaScript-only verifier locks out the institutional buyer. This repo closes that gap.
+Receiver-side verifier implementations of the KXCO hybrid HMAC and ML-DSA webhook signature scheme, ML-DSA-87 and ML-DSA-65 (FIPS 204). Every implementation verifies the same `vectors/vectors.json` against the same envelope format. Banks live in Go and Java. Fintech ops live in Python. Systems integrators live in Rust. A JavaScript-only verifier locks out the institutional buyer. This repo closes that gap.
 
 [![cross-language CI](https://github.com/KnightsbridgeAIQ/kxco-pq-verifiers/actions/workflows/cross-lang.yml/badge.svg)](https://github.com/KnightsbridgeAIQ/kxco-pq-verifiers/actions/workflows/cross-lang.yml)
 [![npm](https://img.shields.io/npm/v/kxco-post-quantum?label=npm)](https://www.npmjs.com/package/kxco-post-quantum)
 [![PyPI](https://img.shields.io/pypi/v/kxco-verify?label=pypi)](https://pypi.org/project/kxco-verify/)
 [![crates.io](https://img.shields.io/crates/v/kxco-verify?label=crates.io)](https://crates.io/crates/kxco-verify)
-[![Go module](https://img.shields.io/badge/go.mod-v1.0.0-007d9c?logo=go)](https://pkg.go.dev/go.kxco.ai/verifiers)
+[![Go module](https://img.shields.io/badge/go.mod-v1.2.1-007d9c?logo=go)](https://pkg.go.dev/go.kxco.ai/verifiers)
 [![live](https://img.shields.io/website?url=https%3A%2F%2Fchain.kxco.ai%2Fwallet%2Fverify&up_message=live&up_color=brightgreen&down_message=down&down_color=red&label=production)](https://chain.kxco.ai/wallet/verify)
 
 ## Install in your language
@@ -29,16 +29,16 @@ go get go.kxco.ai/verifiers@latest
 
 ## Verify a real KXCO production webhook
 
-The KXCO platform publishes its ML-DSA-65 identity key at https://chain.kxco.ai/wallet/api/.well-known/kxco-pq-pubkey. Pin the `kid` and `publicKey`, then verify any inbound delivery offline in the language of your choice.
+The KXCO platform publishes its ML-DSA-87 identity key at https://chain.kxco.ai/wallet/api/.well-known/kxco-pq-pubkey. Pin the `kid` and `publicKey`, then verify any inbound delivery offline in the language of your choice.
 
-The current production kid is **`aa29f37ab7f4b2cf`**. Fetch the matching `publicKey` from the well-known endpoint on first integration.
+The current production kid is **`1fd9ed3b769c28fc`** (ML-DSA-87, a 2592-byte key). Fetch the matching `publicKey` from the well-known endpoint on first integration. The same endpoint lists the earlier ML-DSA-65 key, kid `aa29f37ab7f4b2cf`, as verify-only. In Go, Python and Rust, `PinnedKids` / `pinned_kids` can hold both keys while a receiver moves from one to the other.
 
 ### JavaScript
 
 ```js
 import { webhook } from 'kxco-post-quantum'
 
-const PINNED_KID    = 'aa29f37ab7f4b2cf'
+const PINNED_KID    = '1fd9ed3b769c28fc'
 const PINNED_PUBKEY = Buffer.from(process.env.KXCO_PUBLIC_KEY_HEX, 'hex')
 
 const r = webhook.verifyDelivery({
@@ -56,7 +56,7 @@ if (!r.pqOk || !r.timestampOk || !r.kidOk) return res.status(401).end()
 import kxco_verify as kx
 import os
 
-PINNED_KID    = "aa29f37ab7f4b2cf"
+PINNED_KID    = "1fd9ed3b769c28fc"
 PINNED_PUBKEY = bytes.fromhex(os.environ["KXCO_PUBLIC_KEY_HEX"])
 
 r = kx.verify_delivery(
@@ -78,10 +78,11 @@ let result = verify_delivery(VerifyDeliveryArgs {
     headers:        &headers_map,
     raw_body:       &body,
     pq_public_key:  Some(&pinned_pubkey),
-    pinned_kid:     Some("aa29f37ab7f4b2cf"),
+    pinned_kid:     Some("1fd9ed3b769c28fc"),
+    pinned_kids:    None,
+    hmac_secret:    None,
     window_seconds: 0,
     now_unix:       chrono::Utc::now().timestamp(),
-    ..Default::default()
 });
 if !result.ok() {
     return StatusCode::UNAUTHORIZED;
@@ -93,7 +94,7 @@ if !result.ok() {
 ```go
 import kxcoverify "go.kxco.ai/verifiers"
 
-var PinnedKid = "aa29f37ab7f4b2cf"
+var PinnedKid = "1fd9ed3b769c28fc"
 
 result, err := kxcoverify.VerifyDelivery(kxcoverify.VerifyDeliveryArgs{
     Headers:     headers,
@@ -113,13 +114,13 @@ All four implementations agree on a single envelope:
 ```
 Envelope:               timestamp + "." + raw_body
 X-KXCO-Signature:       sha256=<HMAC-SHA-256 hex>
-X-KXCO-PQ-Signature:    ml-dsa-65=<ML-DSA-65 hex, 6618 chars>
-                     or ml-dsa-87=<ML-DSA-87 hex, 9254 chars>
+X-KXCO-PQ-Signature:    ml-dsa-87=<ML-DSA-87 hex, 9254 chars>
+                     or ml-dsa-65=<ML-DSA-65 hex, 6618 chars>
 X-KXCO-PQ-Kid:          16-hex SHA-256 prefix of the platform public key
 X-KXCO-Timestamp:       Unix seconds
 ```
 
-The pinned public key decides the ML-DSA parameter set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87; any other size is refused. The signature must be the size of that set (3309 or 4627 bytes). A header prefix that names the other set from the key's is refused; a bare hex value takes its set from the key.
+The pinned public key decides the ML-DSA parameter set: 2592 bytes is ML-DSA-87 and 1952 bytes is ML-DSA-65; any other size is refused. The signature must be the size of that set (4627 or 3309 bytes). A header prefix that names the other set from the key's is refused; a bare hex value takes its set from the key.
 
 Either signature alone is sufficient; verifying both is defence-in-depth. The HMAC layer covers ecosystem compatibility; the ML-DSA layer covers non-repudiation and post-quantum forgery resistance.
 
@@ -136,7 +137,7 @@ Default replay window: 5 minutes. Configurable.
 - `mlKem.encapsulate` round-trip
 - `fingerprint` (16-hex kid)
 - `webhook.envelope` / `webhook.hmacHex` / hybrid round-trip
-- `ml_dsa_verify`: ML-DSA-65 and ML-DSA-87 signatures over the webhook envelope, including the refusals (tampered signature, altered message, wrong key, wrong key or signature size, and a key of one set presented with the other set's signature or prefix)
+- `ml_dsa_verify`: ML-DSA-87 and ML-DSA-65 signatures over the webhook envelope, including the refusals (tampered signature, altered message, wrong key, wrong key or signature size, and a key of one set presented with the other set's signature or prefix)
 
 Every language's test suite asserts identical bytes against this file. Cross-language compatibility is enforced by CI on every push.
 
@@ -147,7 +148,7 @@ Every language's test suite asserts identical bytes against this file. Cross-lan
 | JavaScript  | `@noble/post-quantum` | Pure JS, no native deps. Maintainer self-audited; no third-party audit (see the note below). |
 | Python      | `liboqs-python` or `pqcrypto` | Open Quantum Safe / NIST round-finalist implementation, lazy backend detection. |
 | Rust        | `fips204` | Pure-Rust FIPS 204 implementation. No CGo or liboqs build step. |
-| Go          | `cloudflare/circl/sign/mldsa/mldsa65`, `mldsa87` | Cloudflare's CIRCL cryptography library. Pure Go. |
+| Go          | `cloudflare/circl/sign/mldsa/mldsa87`, `mldsa65` | Cloudflare's CIRCL cryptography library. Pure Go. |
 
 **On audit status.** None of the four ML-DSA-65 implementations above carries a third-party audit that we can cite. `@noble/post-quantum` has been self-audited by its maintainer; Cure53's 2023 NDS-01 audit of the `@noble` ecosystem covered `ciphers`, `curves` and `hashes`, and did **not** cover the post-quantum package. Earlier revisions of this table stated otherwise, and that was wrong. What this package does give you is cross-implementation agreement: a payload signed in any one language verifies in every other, asserted byte-for-byte against `vectors/vectors.json` in CI on every push. That is a real property, and it is a different property from an audit. Judge it on its own terms.
 
