@@ -4,6 +4,12 @@ All notable changes to the multi-language verifiers are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 each language uses its own SemVer line.
 
+## [Go 1.2.2, Python 1.2.2, Rust 1.2.2] 2026-10-09
+
+### Changed
+- **An ML-DSA-87 key takes only the `ml-dsa-87=` header form.** `X-KXCO-PQ-Signature` in bare hex under an ML-DSA-87 key is now refused: Go `VerifyPQ` returns an error, Python `verify_pq` and Rust `verify_pq` return false. This is the rule `kxco-post-quantum` 1.8.0 and later and `kxco-post-quantum-webhook` apply, so a delivery now gets the same answer from every KXCO verifier. Before, these verifiers took the set from the key and accepted the bare form. KXCO's own signers always write the prefix. An ML-DSA-65 key still takes the bare hex value, and every ML-DSA-65 result is unchanged.
+- `vectors/vectors.json`: the case "ML-DSA-87 valid, bare hex" is renamed "ML-DSA-87 valid signature, bare hex (refused: an ML-DSA-87 key takes only ml-dsa-87=)" and now expects a refusal. "ML-DSA-87 key with ML-DSA-65 signature, bare hex" is still refused, now for the same reason. The section description states the rule. No other case changed.
+
 ## [Go 1.2.1, Python 1.2.1, Rust 1.2.1] 2026-10-07
 
 These releases carry the ML-DSA-87 verification added in 1.2.0. Verification behaviour is identical to 1.2.0: only documentation and package metadata changed.

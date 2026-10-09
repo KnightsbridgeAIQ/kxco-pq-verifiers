@@ -277,6 +277,7 @@ func TestMLDSAVerifyVectors(t *testing.T) {
 	errReasons := map[string]bool{
 		"declared algorithm disagrees with the key": true,
 		"public key size is neither 1952 nor 2592":  true,
+		"an ML-DSA-87 key takes no bare-hex form":   true,
 	}
 	for _, c := range v.Cases {
 		c := c
