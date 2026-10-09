@@ -99,10 +99,13 @@ def verify_pq(public_key: bytes, timestamp: str, raw_body: bytes, sig_header: st
     """Verify the X-KXCO-PQ-Signature ML-DSA signature.
 
     The public key decides the parameter set: 1952 bytes is ML-DSA-65 and 2592
-    bytes is ML-DSA-87; any other size returns False. The header value may be
-    bare hex or carry an `ml-dsa-65=` or `ml-dsa-87=` prefix; a prefix naming
-    the other set from the key's returns False, as does a signature that is not
-    the size of the key's set (3309 or 4627 bytes).
+    bytes is ML-DSA-87; any other size returns False. The header value carries
+    an `ml-dsa-87=` or `ml-dsa-65=` prefix naming the key's set; a prefix naming
+    the other set from the key's returns False. An ML-DSA-65 key also takes the
+    bare hex, as it always has; an ML-DSA-87 key takes only `ml-dsa-87=`, and
+    bare hex under it returns False, as in kxco-post-quantum 1.8.0 and later.
+    A signature that is not the size of the key's set (3309 or 4627 bytes)
+    returns False.
 
     Returns False on any error (invalid hex, invalid key, signature mismatch).
     Raises RuntimeError only when no ML-DSA backend is installed.
@@ -112,13 +115,15 @@ def verify_pq(public_key: bytes, timestamp: str, raw_body: bytes, sig_header: st
         return False
     algorithm, prefix, sig_size, pqcrypto_module = ml_set
 
-    hex_sig = sig_header
+    hex_sig, prefixed = sig_header, False
     for declared in _ML_DSA_PREFIXES:
         if sig_header.startswith(declared):
             if declared != prefix:
                 return False
-            hex_sig = sig_header[len(declared):]
+            hex_sig, prefixed = sig_header[len(declared):], True
             break
+    if not prefixed and algorithm == "ML-DSA-87":
+        return False
     try:
         sig_bytes = bytes.fromhex(hex_sig)
     except ValueError:

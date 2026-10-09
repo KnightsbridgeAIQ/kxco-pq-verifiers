@@ -122,7 +122,7 @@
     }
   ],
   "ml_dsa_verify": {
-    "description": "ML-DSA signature verification over the webhook envelope, for both parameter sets. The public key decides the set (1952 bytes = ML-DSA-65, 2592 bytes = ML-DSA-87, any other size refused). The signature must be the size of the key set (3309 / 4627 bytes). A header prefix (ml-dsa-65= or ml-dsa-87=) that disagrees with the key set is refused; a bare hex value takes the set from the key. Header value = header_prefix + signatures[signature].hex. Signatures are randomised, so these bytes were generated once and are pinned here; verification of them is deterministic.",
+    "description": "ML-DSA signature verification over the webhook envelope, for both parameter sets. The public key decides the set (1952 bytes = ML-DSA-65, 2592 bytes = ML-DSA-87, any other size refused). The signature must be the size of the key set (3309 / 4627 bytes). A header prefix (ml-dsa-65= or ml-dsa-87=) that disagrees with the key set is refused. An ML-DSA-65 key also takes a bare hex value; an ML-DSA-87 key takes only ml-dsa-87=, and bare hex under it is refused (kxco-post-quantum 1.8.0 and later; these verifiers from 1.2.2). Header value = header_prefix + signatures[signature].hex. Signatures are randomised, so these bytes were generated once and are pinned here; verification of them is deterministic.",
     "generated_by": "kxco-post-quantum 1.7.9 (mlDsa87.keypairFromMaster, mlDsa87.sign, mlDsa.keypairFromMaster, webhook.pqSign; signing backend: openssl 3.5.6 via node:crypto)",
     "public_keys": {
       "ml-dsa-87-a": {
@@ -195,14 +195,14 @@
         "refused_because": null
       },
       {
-        "name": "ML-DSA-87 valid, bare hex",
+        "name": "ML-DSA-87 valid signature, bare hex (refused: an ML-DSA-87 key takes only ml-dsa-87=)",
         "public_key": "ml-dsa-87-a",
         "signature": "ml-dsa-87-a",
         "header_prefix": "",
         "timestamp": "1748000000",
         "body_utf8": "{\"event\":\"payment.settled\",\"amount\":1000}",
-        "expect_valid": true,
-        "refused_because": null
+        "expect_valid": false,
+        "refused_because": "an ML-DSA-87 key takes no bare-hex form"
       },
       {
         "name": "ML-DSA-87 bit-flipped signature",
@@ -292,7 +292,7 @@
         "timestamp": "1748000000",
         "body_utf8": "{\"event\":\"payment.settled\",\"amount\":1000}",
         "expect_valid": false,
-        "refused_because": "signature size does not match the key set"
+        "refused_because": "an ML-DSA-87 key takes no bare-hex form"
       },
       {
         "name": "ML-DSA-87 key with ML-DSA-65 signature, ml-dsa-65= prefix",

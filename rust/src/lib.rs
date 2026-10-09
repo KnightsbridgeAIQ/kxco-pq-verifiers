@@ -93,10 +93,13 @@ pub fn verify_hmac(secret: &[u8], timestamp: &str, raw_body: &[u8], sig_header: 
 /// set: 1952 bytes is ML-DSA-65 and 2592 bytes is ML-DSA-87. Any other size
 /// returns `false`.
 ///
-/// The header value may be bare hex or carry an `ml-dsa-65=` or `ml-dsa-87=`
-/// prefix. A prefix naming the other parameter set from the key's returns
-/// `false`, as does a signature that is not the size of the key's set (3309
-/// bytes for ML-DSA-65, 4627 for ML-DSA-87).
+/// The header value carries an `ml-dsa-87=` or `ml-dsa-65=` prefix naming the
+/// key's set. A prefix naming the other parameter set from the key's returns
+/// `false`. An ML-DSA-65 key also takes the bare hex, as it always has; an
+/// ML-DSA-87 key takes only `ml-dsa-87=`, and bare hex under it returns
+/// `false`, as in kxco-post-quantum 1.8.0 and later. A signature that is not
+/// the size of the key's set (3309 bytes for ML-DSA-65, 4627 for ML-DSA-87)
+/// returns `false`.
 ///
 /// Returns `false` on any error (bad hex, invalid key, signature mismatch).
 pub fn verify_pq(public_key: &[u8], timestamp: &str, raw_body: &[u8], sig_header: &str) -> bool {
@@ -114,10 +117,12 @@ pub fn verify_pq(public_key: &[u8], timestamp: &str, raw_body: &[u8], sig_header
         _ => return false,
     };
 
-    // A declared algorithm must agree with the key.
+    // A declared algorithm must agree with the key, and an ML-DSA-87 key takes
+    // no bare-hex form.
     let hex_sig = match [PREFIX_65, PREFIX_87].into_iter().find(|p| sig_header.starts_with(p)) {
         Some(declared) if declared != key_prefix => return false,
         Some(declared) => &sig_header[declared.len()..],
+        None if key_prefix == PREFIX_87 => return false,
         None => sig_header,
     };
     let sig_bytes = match hex::decode(hex_sig) {

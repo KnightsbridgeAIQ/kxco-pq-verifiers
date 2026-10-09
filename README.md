@@ -8,7 +8,7 @@ Receiver-side verifier implementations of the KXCO hybrid HMAC and ML-DSA webhoo
 [![npm](https://img.shields.io/npm/v/kxco-post-quantum?label=npm)](https://www.npmjs.com/package/kxco-post-quantum)
 [![PyPI](https://img.shields.io/pypi/v/kxco-verify?label=pypi)](https://pypi.org/project/kxco-verify/)
 [![crates.io](https://img.shields.io/crates/v/kxco-verify?label=crates.io)](https://crates.io/crates/kxco-verify)
-[![Go module](https://img.shields.io/badge/go.mod-v1.2.1-007d9c?logo=go)](https://pkg.go.dev/go.kxco.ai/verifiers)
+[![Go module](https://img.shields.io/badge/go.mod-v1.2.2-007d9c?logo=go)](https://pkg.go.dev/go.kxco.ai/verifiers)
 [![live](https://img.shields.io/website?url=https%3A%2F%2Fchain.kxco.ai%2Fwallet%2Fverify&up_message=live&up_color=brightgreen&down_message=down&down_color=red&label=production)](https://chain.kxco.ai/wallet/verify)
 
 ## Install in your language
@@ -120,7 +120,7 @@ X-KXCO-PQ-Kid:          16-hex SHA-256 prefix of the platform public key
 X-KXCO-Timestamp:       Unix seconds
 ```
 
-The pinned public key decides the ML-DSA parameter set: 2592 bytes is ML-DSA-87 and 1952 bytes is ML-DSA-65; any other size is refused. The signature must be the size of that set (4627 or 3309 bytes). A header prefix that names the other set from the key's is refused; a bare hex value takes its set from the key.
+The pinned public key decides the ML-DSA parameter set: 2592 bytes is ML-DSA-87 and 1952 bytes is ML-DSA-65; any other size is refused. The signature must be the size of that set (4627 or 3309 bytes). A header prefix that names the other set from the key's is refused. An ML-DSA-65 key also takes a bare hex value. An ML-DSA-87 key takes only `ml-dsa-87=`, and bare hex under it is refused, as in `kxco-post-quantum` 1.8.0 and later.
 
 Either signature alone is sufficient; verifying both is defence-in-depth. The HMAC layer covers ecosystem compatibility; the ML-DSA layer covers non-repudiation and post-quantum forgery resistance.
 

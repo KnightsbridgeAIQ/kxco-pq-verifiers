@@ -123,25 +123,30 @@ func mlDsaSetForPublicKey(publicKey []byte) (mlDsaSet, error) {
 // /.well-known/kxco-pq-pubkey) and it decides the parameter set: 1952 bytes
 // is ML-DSA-65 and 2592 bytes is ML-DSA-87. Any other size is an error.
 //
-// The header value may be bare hex or carry an "ml-dsa-65=" or "ml-dsa-87="
-// prefix. A prefix naming the other parameter set from the key's is an error.
-// A signature that is not the size of the key's set (3309 bytes for
-// ML-DSA-65, 4627 for ML-DSA-87) does not verify.
+// The header value carries an "ml-dsa-87=" or "ml-dsa-65=" prefix naming the
+// key's set. A prefix naming the other parameter set from the key's is an
+// error. An ML-DSA-65 key also takes the bare hex, as it always has; an
+// ML-DSA-87 key takes only "ml-dsa-87=", and bare hex under it is an error,
+// as in kxco-post-quantum 1.8.0 and later. A signature that is not the size of
+// the key's set (3309 bytes for ML-DSA-65, 4627 for ML-DSA-87) does not verify.
 func VerifyPQ(publicKey []byte, timestamp string, rawBody []byte, sigHeader string) (bool, error) {
 	set, err := mlDsaSetForPublicKey(publicKey)
 	if err != nil {
 		return false, err
 	}
 
-	hexSig := sigHeader
+	hexSig, prefixed := sigHeader, false
 	for _, declared := range []mlDsaSet{mlDsa65Set, mlDsa87Set} {
 		if rest, found := strings.CutPrefix(sigHeader, declared.name+"="); found {
 			if declared.name != set.name {
 				return false, fmt.Errorf("signature header declares %s but the public key is %s", declared.label, set.label)
 			}
-			hexSig = rest
+			hexSig, prefixed = rest, true
 			break
 		}
+	}
+	if !prefixed && set.name == mlDsa87Set.name {
+		return false, fmt.Errorf("an %s signature header must carry the %s= prefix", set.label, set.name)
 	}
 
 	sigBytes, err := hex.DecodeString(hexSig)
