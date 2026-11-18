@@ -55,7 +55,7 @@ jobs:
         python: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: ${{ matrix.python }}
       # The ML-DSA vectors need a backend. KXCO_REQUIRE_PQ_BACKEND turns a
